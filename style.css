@@ -125,3 +125,48 @@ details.ey>summary .yc{font-family:"Patrick Hand",sans-serif;font-size:19px;lett
 .xrow input[type=checkbox]{width:26px;height:26px;accent-color:#2e9d4b}
 .xurl{font-size:13px;word-break:break-all;opacity:.7}
 @media (max-width:600px){.egrid{grid-template-columns:repeat(3,1fr);gap:8px;padding:6px}.et .cap{font-size:12px}}
+/* ---------- odtwarzacz albumu ---------- */
+.player{position:fixed;inset:0;z-index:80;background:#121212;color:#fff;display:flex;flex-direction:column;font-family:"Patrick Hand",system-ui,sans-serif}
+.pl-top{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:8px 12px;background:var(--yellow);color:var(--ink);border-bottom:4px solid var(--ink)}
+.pl-title{margin:0;font-family:Bangers,Impact,sans-serif;font-weight:400;letter-spacing:.04em;font-size:clamp(20px,2.6vw,30px);line-height:1.1;flex:1 1 300px;min-width:0}
+.pl-count{font-family:Bangers,Impact,sans-serif;font-size:24px;letter-spacing:.05em;background:#fff;border:3px solid var(--ink);padding:0 10px;box-shadow:3px 3px 0 var(--ink)}
+.pl-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pl-btn{font-family:Bangers,Impact,sans-serif;letter-spacing:.05em;font-size:19px;cursor:pointer;color:var(--ink);background:#fff;border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);padding:4px 12px}
+.pl-btn:hover{background:#fff6cf}
+.pl-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
+.pl-close{background:var(--red);color:#fff;-webkit-text-stroke:.5px var(--ink);font-size:21px}
+.pl-close:hover{background:#ef3b52}
+.pl-play[aria-pressed=true]{background:#7ee08f}
+.pl-gf{font-size:15px;color:var(--ink);opacity:.7;text-decoration:underline;padding:0 4px}
+.pl-gf:hover{opacity:1}
+.pl-stage{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:pan-y pinch-zoom;user-select:none}
+.pl-img{max-width:100%;max-height:100%;object-fit:contain;display:block;transition:opacity .2s}
+.player.loading .pl-img{opacity:.35}
+.player.loading .pl-stage:after{content:"";position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px;border:5px solid rgba(255,255,255,.25);border-top-color:var(--yellow);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pl-msg{position:absolute;inset:auto 16px;text-align:center;font-size:24px}
+.pl-msg a{color:var(--yellow)}
+.pl-video{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--yellow);color:var(--ink);border:3px solid var(--ink);box-shadow:4px 4px 0 #000;padding:10px 18px;font-size:22px;text-decoration:none}
+.pl-nav{position:absolute;top:50%;transform:translateY(-50%);width:64px;height:96px;font-size:64px;line-height:80px;cursor:pointer;color:var(--ink);background:rgba(255,255,255,.82);border:3px solid var(--ink);box-shadow:3px 3px 0 #000;padding:0}
+.pl-nav:hover{background:var(--yellow)}
+.pl-prev{left:12px}.pl-next{right:12px}
+.pl-strip{display:flex;gap:6px;overflow-x:auto;padding:8px 10px;background:#1d1d1d;border-top:3px solid #000;scrollbar-width:thin;flex:none}
+.pl-th{flex:none;width:76px;height:76px;padding:0;border:3px solid transparent;background:#333;cursor:pointer;opacity:.6;position:relative}
+.pl-th img{width:100%;height:100%;object-fit:cover;display:block}
+.pl-th.on{border-color:var(--yellow);opacity:1}
+.pl-th:hover{opacity:1}
+.pl-th.vid:after{content:"▶";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;text-shadow:0 0 4px #000}
+.player.fs .pl-top{padding:4px 10px}
+@media (max-width:700px){
+  .pl-top{padding:6px 8px;gap:6px}
+  .pl-title{flex-basis:100%;font-size:20px}
+  .pl-count{font-size:19px}
+  .pl-btn{font-size:16px;padding:3px 8px}
+  .pl-close{font-size:17px}
+  .pl-gf{display:none}
+  .pl-fs .t{display:none}
+  .pl-fs{font-size:20px;padding:1px 10px}
+  .pl-nav{width:44px;height:70px;font-size:44px;line-height:60px;background:rgba(255,255,255,.6)}
+  .pl-prev{left:4px}.pl-next{right:4px}
+  .pl-th{width:58px;height:58px}
+}

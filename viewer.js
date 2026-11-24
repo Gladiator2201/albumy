@@ -45,7 +45,7 @@
     if (!a) return;
     bubbleFor = tile;
     bubble.querySelector(".b-title").textContent = a.t;
-    bubble.querySelector(".b-hint").textContent = touch ? "Dotknij okładki jeszcze raz, aby otworzyć" : "";
+    bubble.querySelector(".b-hint").textContent = touch ? "Dotknij okładki jeszcze raz, aby otworzyć album" : "";
     bubble.hidden = false;
     bubble.classList.remove("below");
     var r = tile.getBoundingClientRect(), bw = bubble.offsetWidth, bh = bubble.offsetHeight;
@@ -70,10 +70,22 @@
     if (t && !t.contains(e.relatedTarget)) hideBubble();
   });
   gallery.addEventListener("pointerdown", function (e) { lastPointer = e.pointerType || "mouse"; });
+  function hasPlayer(a) { return a && a.f > 0 && window.AlbumPlayer; }
+  function openAlbum(i, from) {
+    var a = list[i]; if (!hasPlayer(a)) return false;
+    hideBubble(); window.AlbumPlayer.open(a, from); return true;
+  }
   gallery.addEventListener("click", function (e) {
     var t = e.target.closest(".tile"); if (!t) return;
-    if (lastPointer !== "mouse" && bubbleFor !== t) { e.preventDefault(); showBubble(t, true); }
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
+    if (lastPointer !== "mouse" && bubbleFor !== t) { e.preventDefault(); showBubble(t, true); return; }
+    if (hasPlayer(list[+t.dataset.i])) { e.preventDefault(); openAlbum(+t.dataset.i, t); }
   });
+  window.AlbumyOnPlayerClose = function (tile) {
+    if (!tile) return;
+    tile.classList.remove("flash"); void tile.offsetWidth; tile.classList.add("flash");
+    setTimeout(function () { tile.classList.remove("flash"); }, 3000);
+  };
   var kbd = false;
   document.addEventListener("keydown", function (e) { if (e.key === "Tab") kbd = true; }, true);
   document.addEventListener("pointerdown", function () { kbd = false; }, true);
@@ -93,7 +105,7 @@
     list.forEach(function (a, i) {
       if (a.y !== cur) { cur = a.y; html += '<li class="py">' + esc(a.y) + "</li>"; }
       html += '<li class="pi" data-i="' + i + '"><button type="button" class="pgo" data-i="' + i + '">' + esc(a.t) + '</button>' +
-        '<a class="popen" href="' + esc(a.u) + '" target="_blank" rel="noopener" title="Otwórz album" aria-label="Otwórz album ' + esc(a.t) + '">↗</a></li>';
+        '<a class="popen" data-i="' + i + '" href="' + esc(a.u) + '" target="_blank" rel="noopener" title="Otwórz album" aria-label="Otwórz album ' + esc(a.t) + '">↗</a></li>';
     });
     $("popup-list").innerHTML = html;
   }
@@ -124,9 +136,15 @@
   popup.addEventListener("click", function (e) {
     if (e.target === popup) return closePopup();
     var b = e.target.closest(".pgo"); if (b) return goTo(+b.dataset.i);
-    if (e.target.closest(".popen")) closePopup();
+    var o = e.target.closest(".popen");
+    if (o) {
+      closePopup();
+      var i = +o.dataset.i;
+      if (hasPlayer(list[i])) { e.preventDefault(); openAlbum(i, gallery.querySelector('.tile[data-i="' + i + '"]')); }
+    }
   });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !popup.hidden) closePopup(); });
+  window.AlbumyOpenAlbum = openAlbum;
   $("popup-search").addEventListener("input", function () {
     var q = this.value.trim().toLowerCase();
     var items = $("popup-list").children, lastY = null, anyInY = false;
