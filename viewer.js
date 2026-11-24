@@ -22,7 +22,8 @@
         years += '<a href="#' + yid + '" class="chip">' + esc(a.y) + "</a>";
       }
       var c1 = A.coverUrl(a.c, 300), c2 = A.coverUrl(a.c, 600);
-      html += '<a class="tile" href="' + esc(a.u) + '" target="_blank" rel="noopener" data-i="' + i + '" aria-label="' + esc(a.t) + '">' +
+      var link = a.f > 0 ? 'role="button" tabindex="0"' : 'href="' + esc(a.u) + '" target="_blank" rel="noopener"';
+      html += '<a class="tile" ' + link + ' data-i="' + i + '" aria-label="' + esc(a.t) + '">' +
         (a.c ? '<img loading="lazy" decoding="async" alt="" src="' + esc(c1) + '"' + (c2 !== c1 ? ' srcset="' + esc(c1) + " 1x, " + esc(c2) + ' 2x"' : "") + ' referrerpolicy="no-referrer">' : "") +
         '<span class="ph">' + esc(a.t) + "</span></a>";
       idx++;
@@ -77,9 +78,13 @@
   }
   gallery.addEventListener("click", function (e) {
     var t = e.target.closest(".tile"); if (!t) return;
-    if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
     if (lastPointer !== "mouse" && bubbleFor !== t) { e.preventDefault(); showBubble(t, true); return; }
     if (hasPlayer(list[+t.dataset.i])) { e.preventDefault(); openAlbum(+t.dataset.i, t); }
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    var t = e.target.closest && e.target.closest('.tile[role="button"],.popen[role="button"]');
+    if (t) { e.preventDefault(); t.click(); }
   });
   window.AlbumyOnPlayerClose = function (tile) {
     if (!tile) return;
@@ -105,7 +110,7 @@
     list.forEach(function (a, i) {
       if (a.y !== cur) { cur = a.y; html += '<li class="py">' + esc(a.y) + "</li>"; }
       html += '<li class="pi" data-i="' + i + '"><button type="button" class="pgo" data-i="' + i + '">' + esc(a.t) + '</button>' +
-        '<a class="popen" data-i="' + i + '" href="' + esc(a.u) + '" target="_blank" rel="noopener" title="Otwórz album" aria-label="Otwórz album ' + esc(a.t) + '">↗</a></li>';
+        '<a class="popen" data-i="' + i + '" ' + (a.f > 0 ? 'role="button" tabindex="0"' : 'href="' + esc(a.u) + '" target="_blank" rel="noopener"') + ' title="Otwórz album" aria-label="Otwórz album ' + esc(a.t) + '">↗</a></li>';
     });
     $("popup-list").innerHTML = html;
   }

@@ -27,7 +27,6 @@
       '<div class="pl-top"><h2 class="pl-title"></h2><span class="pl-count" aria-live="polite"></span>' +
       '<div class="pl-tools"><button type="button" class="pl-btn pl-play" aria-pressed="false" title="Pokaz slajdów (spacja)">▶ Pokaz</button>' +
       '<button type="button" class="pl-btn pl-fs" title="Pełny ekran (F)" aria-label="Pełny ekran">⛶<span class="t"> Pełny ekran</span></button>' +
-      '<a class="pl-gf" target="_blank" rel="noopener" title="Otwórz ten album w Google Foto">Google Foto ↗</a>' +
       '<button type="button" class="pl-btn pl-close" title="Zamknij (Esc)" aria-label="Zamknij">✕ Zamknij</button></div></div>' +
       '<div class="pl-stage"><img class="pl-img" alt="" referrerpolicy="no-referrer" draggable="false">' +
       '<a class="pl-video" target="_blank" rel="noopener" hidden>▶ Film – obejrzyj w Google Foto</a>' +
@@ -92,7 +91,6 @@
     album = a; photos = []; cur = 0; opener = fromEl || null;
     var my = ++reqId;
     el.querySelector(".pl-title").textContent = a.t;
-    el.querySelector(".pl-gf").href = a.u;
     el.querySelector(".pl-strip").innerHTML = "";
     el.querySelector(".pl-img").removeAttribute("src");
     el.querySelector(".pl-count").textContent = "";
