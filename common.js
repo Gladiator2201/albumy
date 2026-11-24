@@ -1,7 +1,7 @@
 /* Albumy – wspólne funkcje (katalog, okładki, łącza do udostępniania) */
 (function (global) {
   "use strict";
-  var VER = "20261124d";
+  var VER = "20261124e";
   var CANONICAL = "https://gladiator2201.github.io/albumy/";
   var LH3 = "https://lh3.googleusercontent.com/pw/";
   var catalog = null;
@@ -58,7 +58,7 @@
 
   function loadCatalog() {
     if (catalog) return Promise.resolve(catalog);
-    return fetch("catalog.json?v=" + VER).then(function (r) {
+    return fetch((global.ALBUMY_BASE || "") + "catalog.json?v=" + VER).then(function (r) {
       if (!r.ok) throw new Error("katalog " + r.status);
       return r.json();
     }).then(function (j) {
@@ -148,6 +148,7 @@
     } catch (e) {}
     return String(location.hash || "").replace(/^#/, "");
   }
+  function albumUrl(n) { return CANONICAL + "a/" + n; }
   function shareUrl(hashPart) { return CANONICAL + "?z=" + hashPart; }
   function facebookUrl(hashPart) {
     return "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(shareUrl(hashPart));
@@ -186,7 +187,7 @@
     afId: afId, shortCode: shortCode, linkKind: linkKind, extractLinks: extractLinks, normUrl: normUrl,
     loadCatalog: loadCatalog, findInCatalog: findInCatalog,
     idsToMask: idsToMask, maskToIds: maskToIds, encodeSet: encodeSet, decodeSet: decodeSet,
-    payloadFromLocation: payloadFromLocation, shareUrl: shareUrl, facebookUrl: facebookUrl, openFacebook: openFacebook,
+    payloadFromLocation: payloadFromLocation, shareUrl: shareUrl, albumUrl: albumUrl, facebookUrl: facebookUrl, openFacebook: openFacebook,
     resolveSet: resolveSet, yearOf: yearOf, plural: plural
   };
 })(window);

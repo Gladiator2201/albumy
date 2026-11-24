@@ -50,7 +50,8 @@
     rendered[y] = true;
     det.querySelector(".egrid").innerHTML = yearAlbums(y).map(function (a) {
       return '<div class="et' + (sel.has(a.n) ? "" : " off") + '" data-n="' + a.n + '" title="' + esc(a.t) + '" role="checkbox" tabindex="0" aria-checked="' + sel.has(a.n) + '">' +
-        '<div class="sq"><img loading="lazy" alt="" referrerpolicy="no-referrer" src="' + esc(A.coverUrl(a.c, 200)) + '"><span class="ck">' + (sel.has(a.n) ? "✓" : "✕") + "</span></div>" +
+        '<div class="sq"><img loading="lazy" alt="" referrerpolicy="no-referrer" src="' + esc(A.coverUrl(a.c, 200)) + '"><span class="ck">' + (sel.has(a.n) ? "✓" : "✕") + "</span>" +
+        (a.f > 0 ? '<button type="button" class="et-play" title="Obejrzyj album / udostępnij" aria-label="Obejrzyj album">▶</button>' : "") + "</div>" +
         '<div class="cap">' + esc(a.t) + "</div></div>";
     }).join("");
     applySearch();
@@ -83,11 +84,14 @@
       refreshYearHeads(); changed();
       return;
     }
+    var pl = e.target.closest(".et-play");
+    if (pl) { e.stopPropagation(); var et = pl.closest(".et"); window.AlbumPlayer.open(cat.byN[+et.dataset.n], pl); return; }
     var t = e.target.closest(".et");
     if (t) toggleTile(t);
   });
   $("years").addEventListener("keydown", function (e) {
     var t = e.target.closest(".et");
+    if (e.target.closest(".et-play")) return;
     if (t && (e.key === " " || e.key === "Enter")) { e.preventDefault(); toggleTile(t); }
   });
   function toggleTile(t) {
