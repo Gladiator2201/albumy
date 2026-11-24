@@ -1,7 +1,7 @@
 /* Albumy – wspólne funkcje (katalog, okładki, łącza do udostępniania) */
 (function (global) {
   "use strict";
-  var VER = "20261124e";
+  var VER = "20261124f";
   var CANONICAL = "https://gladiator2201.github.io/albumy/";
   var LH3 = "https://lh3.googleusercontent.com/pw/";
   var catalog = null;
@@ -168,7 +168,7 @@
     var list = [];
     (set.ids || []).forEach(function (n) { if (c.byN[n]) list.push(c.byN[n]); });
     (set.x || []).forEach(function (a, i) { list.push({ n: "x" + i, y: yearOf(a), t: a.t || a.u, u: a.u, c: a.c, extra: true }); });
-    function rank(y) { return /^\d{4}$/.test(y) ? 0 : (y === "Pokazy" ? 1 : 2); }
+    function rank(y) { return /^\d{4}$/.test(y) ? 0 : (y === "Flog Danusi" ? 1 : y === "Pokazy" ? 2 : 3); }
     list.sort(function (a, b) {
       return (rank(a.y) - rank(b.y)) || String(a.y).localeCompare(String(b.y)) ||
         String(a.t).localeCompare(String(b.t), "pl", { numeric: true });

@@ -3,7 +3,7 @@
   "use strict";
   var A = global.Albumy, esc = A.esc;
   var LH3 = "https://lh3.googleusercontent.com/pw/";
-  var el = null, album = null, photos = [], cur = 0, timer = null, pushed = false, opener = null, reqId = 0, opts = {};
+  var caps = null, el = null, album = null, photos = [], cur = 0, timer = null, pushed = false, opener = null, reqId = 0, opts = {};
   var BASE = global.ALBUMY_BASE || "";
   var SLIDE_MS = 4000;
 
@@ -13,8 +13,9 @@
     var w = Math.ceil(innerWidth * dpr / 400) * 400, h = Math.ceil(innerHeight * dpr / 300) * 300;
     return "=w" + Math.min(w, 2560) + "-h" + Math.min(h, 1920);
   }
-  function big(p) { return full(p[0]) + size(); }
-  function thumb(p) { return full(p[0]) + "=w160-h160-c"; }
+  function isG(p) { return !/^https?:/.test(p[0]) || /googleusercontent\.com\//.test(p[0]); }
+  function big(p) { return isG(p) ? full(p[0]).replace(/=[^\/]*$/, "") + size() : p[0]; }
+  function thumb(p) { return isG(p) ? full(p[0]).replace(/=[^\/]*$/, "") + "=w160-h160-c" : p[0].replace("/media/foto/", "/media/foto_mini/"); }
   function videoUrl(p) {
     if (!album || !album.u) return "";
     return album.u.replace(/(\/share\/[^\/?#]+)/, "$1/photo/" + encodeURIComponent(p[4]));
@@ -26,13 +27,16 @@
     el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); el.setAttribute("aria-label", "Odtwarzacz albumu");
     el.innerHTML =
       '<div class="pl-top"><h2 class="pl-title"></h2><span class="pl-count" aria-live="polite"></span>' +
-      '<div class="pl-tools"><button type="button" class="pl-btn pl-play" aria-pressed="false" title="Pokaz slajdów (spacja)">▶ Pokaz</button>' +
+      '<div class="pl-tools"><button type="button" class="pl-btn pl-play" aria-pressed="false" title="Pokaz slajdów (spacja)">▶<span class="t"> Pokaz</span></button>' +
       '<button type="button" class="pl-btn pl-fs" title="Pełny ekran (F)" aria-label="Pełny ekran">⛶<span class="t"> Pełny ekran</span></button>' +
+      '<button type="button" class="pl-btn pl-order" hidden title="Zmień kolejność zdjęć">⇅<span class="t"> Od najnowszych</span></button>' +
+      '<button type="button" class="pl-btn pl-fb" title="Udostępnij ten album na Facebooku">f<span class="t"> Facebook</span></button>' +
       '<button type="button" class="pl-btn pl-share" title="Link i kod QR do tego albumu">⤴<span class="t"> Udostępnij</span></button>' +
-      '<button type="button" class="pl-btn pl-close" title="Zamknij (Esc)" aria-label="Zamknij">✕ Zamknij</button></div></div>' +
+      '<button type="button" class="pl-btn pl-close" title="Zamknij (Esc)" aria-label="Zamknij">✕<span class="t"> Zamknij</span></button></div></div>' +
       '<div class="pl-stage"><img class="pl-img" alt="" referrerpolicy="no-referrer" draggable="false">' +
       '<a class="pl-video" target="_blank" rel="noopener" hidden>▶ Film – obejrzyj w Google Foto</a>' +
       '<p class="pl-msg" hidden></p>' +
+      '<div class="pl-cap" hidden><b class="c-t"></b> <span class="c-d"></span><span class="c-o"></span></div>' +
       '<button type="button" class="pl-nav pl-prev" aria-label="Poprzednie zdjęcie (strzałka w lewo)">‹</button>' +
       '<button type="button" class="pl-nav pl-next" aria-label="Następne zdjęcie (strzałka w prawo)">›</button></div>' +
       '<div class="pl-strip" role="listbox" aria-label="Miniatury"></div>' +
@@ -52,6 +56,14 @@
     q(".pl-close").addEventListener("click", function () { close(); });
     q(".pl-play").addEventListener("click", toggleShow);
     q(".pl-share").addEventListener("click", openShare);
+    q(".pl-fb").addEventListener("click", shareFb);
+    q(".pl-order").addEventListener("click", function () {
+      stopShow();
+      photos.reverse(); if (caps) caps.reverse();
+      newestFirst = !newestFirst;
+      q(".pl-order .t").textContent = newestFirst ? " Od najstarszych" : " Od najnowszych";
+      buildStrip(); go(0);
+    });
     q(".sb-x").addEventListener("click", closeShare);
     q(".pl-sharebox").addEventListener("click", function (e) { if (e.target === this) closeShare(); });
     q(".sb-copy").addEventListener("click", function () {
@@ -61,10 +73,7 @@
         try { document.execCommand("copy"); } catch (e) {} done();
       });
     });
-    q(".sb-fb").addEventListener("click", function () {
-      var u = "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(albumLink());
-      var w = global.open(u, "fbshare", "width=640,height=680,scrollbars=yes,resizable=yes"); if (w) try { w.opener = null; } catch (e) {}
-    });
+    q(".sb-fb").addEventListener("click", shareFb);
     q(".sb-png").addEventListener("click", downloadQr);
     q(".sb-cqr").addEventListener("click", copyQr);
     q(".pl-fs").addEventListener("click", toggleFs);
@@ -117,7 +126,10 @@
   function open(a, fromEl, o) {
     if (!el) build();
     opts = o || {};
-    album = a; photos = []; cur = 0; opener = fromEl || null;
+    album = a; photos = []; caps = null; cur = 0; opener = fromEl || null; newestFirst = false;
+    el.querySelector(".pl-order").hidden = true;
+    el.querySelector(".pl-order .t").textContent = " Od najnowszych";
+    el.querySelector(".pl-cap").hidden = true;
     el.classList.toggle("single", !!opts.single);
     el.querySelector(".pl-sharebox").hidden = true;
     var my = ++reqId;
@@ -135,13 +147,12 @@
       return r.json();
     }).then(function (j) {
       if (my !== reqId) return;
-      photos = j.p || [];
+      photos = (j.p || []).slice();
+      caps = j.cap ? j.cap.slice() : null;
       if (!photos.length) throw new Error("pusty album");
       msg("");
-      el.querySelector(".pl-strip").innerHTML = photos.map(function (p, i) {
-        return '<button type="button" class="pl-th' + (p[3] === "v" ? " vid" : "") + '" data-i="' + i + '" role="option" aria-label="Zdjęcie ' + (i + 1) + '">' +
-          '<img loading="lazy" alt="" referrerpolicy="no-referrer" src="' + esc(thumb(p)) + '"></button>';
-      }).join("");
+      el.querySelector(".pl-order").hidden = !j.d;
+      buildStrip();
       go(0);
     }).catch(function () {
       if (my !== reqId) return;
@@ -149,6 +160,19 @@
       el.querySelector(".pl-msg").innerHTML = 'Nie udało się wczytać zdjęć tego albumu.<br><a href="' + esc(a.u) + '" target="_blank" rel="noopener">Otwórz go w Google Foto ↗</a>';
       el.querySelector(".pl-msg").hidden = false;
     });
+  }
+  var newestFirst = false;
+  function buildStrip() {
+    el.querySelector(".pl-strip").innerHTML = photos.map(function (p, i) {
+      var c = caps && caps[i];
+      return '<button type="button" class="pl-th' + (p[3] === "v" ? " vid" : "") + '" data-i="' + i + '" role="option" aria-label="Zdjęcie ' + (i + 1) + (c && c[0] ? ": " + esc(c[0]) : "") + '">' +
+        '<img loading="lazy" alt="" referrerpolicy="no-referrer" src="' + esc(thumb(p)) + '"></button>';
+    }).join("");
+  }
+  function shareFb() {
+    stopShow();
+    var u = "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(albumLink());
+    var w = global.open(u, "fbshare", "width=640,height=680,scrollbars=yes,resizable=yes"); if (w) try { w.opener = null; } catch (e) {}
   }
   function msg(t) { var m = el.querySelector(".pl-msg"); m.textContent = t; m.hidden = !t; }
 
@@ -161,7 +185,14 @@
   function show(scrollStrip) {
     var p = photos[cur], img = el.querySelector(".pl-img"), src = big(p);
     if (img.getAttribute("src") !== src) { el.classList.add("loading"); img.src = src; }
-    img.alt = album.t + " – zdjęcie " + (cur + 1);
+    var c = caps && caps[cur], cap = el.querySelector(".pl-cap");
+    img.alt = (c && c[0]) || (album.t + " – zdjęcie " + (cur + 1));
+    if (c && (c[0] || c[1])) {
+      cap.querySelector(".c-t").textContent = c[0] || "";
+      cap.querySelector(".c-d").textContent = c[1] ? "· " + c[1].slice(0, 10) : "";
+      cap.querySelector(".c-o").textContent = c[2] || "";
+      cap.hidden = false;
+    } else cap.hidden = true;
     var v = el.querySelector(".pl-video");
     if (p[3] === "v") { v.hidden = false; v.href = videoUrl(p); } else v.hidden = true;
     el.querySelector(".pl-count").textContent = (cur + 1) + " / " + photos.length;
@@ -180,13 +211,13 @@
   function toggleShow() { timer ? stopShow() : startShow(); }
   function startShow() {
     if (!photos.length) return;
-    var b = el.querySelector(".pl-play"); b.textContent = "❚❚ Zatrzymaj"; b.setAttribute("aria-pressed", "true");
+    var b = el.querySelector(".pl-play"); b.innerHTML = '❚❚<span class="t"> Zatrzymaj</span>'; b.setAttribute("aria-pressed", "true");
     timer = setInterval(function () { go(cur + 1); }, SLIDE_MS);
   }
   function stopShow() {
     if (!timer) return;
     clearInterval(timer); timer = null;
-    var b = el.querySelector(".pl-play"); b.textContent = "▶ Pokaz"; b.setAttribute("aria-pressed", "false");
+    var b = el.querySelector(".pl-play"); b.innerHTML = '▶<span class="t"> Pokaz</span>'; b.setAttribute("aria-pressed", "false");
   }
   function toggleFs() {
     var d = document;

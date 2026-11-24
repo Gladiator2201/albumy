@@ -193,3 +193,13 @@ body.single{min-height:100vh;display:flex;align-items:center;justify-content:cen
 .cover-screen .btn.big{font-size:28px;padding:10px 26px}
 .et-play{position:absolute;right:5px;bottom:5px;width:34px;height:34px;border:2px solid var(--ink);background:var(--yellow);font-size:16px;cursor:pointer;box-shadow:2px 2px 0 var(--ink);padding:0}
 .et-play:hover{background:#fff}
+
+/* podpisy zdjęć (flog) i przyciski */
+.pl-cap{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);max-width:min(900px,calc(100% - 150px));background:rgba(0,0,0,.66);color:#fff;padding:6px 14px;border-radius:12px;font-size:19px;line-height:1.25;text-align:center;pointer-events:none}
+.pl-cap .c-d{opacity:.75;font-size:16px;white-space:nowrap}
+.pl-cap .c-o{display:block;font-size:15px;opacity:.85;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.pl-cap .c-o:empty{display:none}
+.pl-fb{background:#1877f2;color:#fff;-webkit-text-stroke:.3px var(--ink)}
+.pl-fb:hover{background:#3b8ff5}
+@media (max-width:700px){.pl-fb .t,.pl-order .t{display:none}.pl-fb,.pl-order{font-size:20px;padding:1px 10px}.pl-cap{max-width:calc(100% - 20px);font-size:16px;bottom:6px}.pl-cap .c-o{display:none}}
+@media (max-width:700px){.pl-play .t,.pl-close .t{display:none}.pl-play,.pl-close{font-size:20px;padding:1px 11px}.pl-tools{gap:6px}.pl-top .pl-count{font-size:18px;padding:0 6px}}
