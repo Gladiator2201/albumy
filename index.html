@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Albumy rodzinne · Wszystko co Nasze</title>
+<meta name="description" content="Okładki rodzinnych albumów ze zdjęciami. Najedź albo dotknij okładki, a dymek powie, co to za album.">
+<meta name="theme-color" content="#f4c430">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="pl_PL">
+<meta property="og:site_name" content="Wszystko co Nasze">
+<meta property="og:title" content="Albumy rodzinne – Wszystko co Nasze">
+<meta property="og:description" content="Okładki rodzinnych albumów ze zdjęciami. Kliknij okładkę, a album otworzy się w nowej karcie.">
+<meta property="og:url" content="https://gladiator2201.github.io/albumy/">
+<meta property="og:image" content="https://gladiator2201.github.io/albumy/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://gladiator2201.github.io/albumy/og.jpg">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M10 15h80a8 8 0 0 1 8 8v40a8 8 0 0 1-8 8H45L25 90V71H10a8 8 0 0 1-8-8V23a8 8 0 0 1 8-8z' fill='%23fff' stroke='%23111' stroke-width='6'/%3E%3Ccircle cx='32' cy='43' r='6'/%3E%3Ccircle cx='50' cy='43' r='6'/%3E%3Ccircle cx='68' cy='43' r='6'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://lh3.googleusercontent.com">
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Patrick+Hand&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=20261124b">
+</head>
+<body class="viewer">
+<header class="hero">
+  <p class="kick">Wszystko co Nasze</p>
+  <h1 id="title" class="boom">Albumy rodzinne</h1>
+  <p id="dedication" class="dedic" hidden></p>
+  <p id="count" class="count"></p>
+  <nav id="years" class="years" aria-label="Lata"></nav>
+</header>
+
+<main id="gallery" aria-live="polite">
+  <p class="loading">Ładuję okładki…</p>
+</main>
+<p id="empty-msg" class="empty" hidden>Ta galeria czeka na zestaw albumów.</p>
+
+<div class="dock">
+  <button type="button" id="btn-list" class="btn big" hidden aria-haspopup="dialog">☰ Lista albumów</button>
+  <button type="button" id="btn-fb" class="btn fb" hidden>Udostępnij na Facebooku</button>
+</div>
+
+<div id="bubble" class="bubble" role="tooltip" hidden><span class="b-title"></span><span class="b-hint"></span></div>
+
+<div id="popup" class="popup" hidden>
+  <div class="popup-card" role="dialog" aria-modal="true" aria-labelledby="popup-h">
+    <div class="popup-head">
+      <h2 id="popup-h">Lista albumów</h2>
+      <button type="button" class="x" id="popup-close" aria-label="Zamknij">✕</button>
+    </div>
+    <input type="search" id="popup-search" placeholder="Szukaj w tytułach (np. Lwówek, Wigilia, 2010)…" autocomplete="off">
+    <ol id="popup-list" class="plist"></ol>
+    <p class="popup-foot">Wybierz tytuł – pokażę okładkę. Strzałka ↗ od razu otwiera album.</p>
+  </div>
+</div>
+
+<footer class="foot">Najedź na okładkę (na telefonie dotknij), a dymek powie, co to za album. Kliknięcie otwiera album w nowej karcie.</footer>
+<script src="common.js?v=20261124b"></script>
+<script src="viewer.js?v=20261124b"></script>
+</body>
+</html>

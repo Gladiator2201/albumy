@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Układanie zestawu · Albumy</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M10 15h80a8 8 0 0 1 8 8v40a8 8 0 0 1-8 8H45L25 90V71H10a8 8 0 0 1-8-8V23a8 8 0 0 1 8-8z' fill='%23fff' stroke='%23111' stroke-width='6'/%3E%3Ccircle cx='32' cy='43' r='6'/%3E%3Ccircle cx='50' cy='43' r='6'/%3E%3Ccircle cx='68' cy='43' r='6'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Patrick+Hand&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=20261124b">
+</head>
+<body class="editor">
+<header class="hero">
+  <p class="kick">Tylko do układania zestawu</p>
+  <h1 class="boom">Albumy – edytor</h1>
+  <p id="dedication" class="dedic" hidden></p>
+</header>
+<main>
+  <section class="panel">
+    <h2>1. Zestaw <small>– dla kogo i pod jaką nazwą</small></h2>
+    <div class="row">
+      <label class="fld">Dla kogo (dedykacja)
+        <input type="text" id="in-ded" maxlength="120" placeholder="np. Dla Zosi" autocomplete="off">
+      </label>
+      <label class="fld">Tytuł strony
+        <input type="text" id="in-title" maxlength="120" placeholder="Albumy rodzinne" autocomplete="off">
+      </label>
+      <label class="fld">Zapisane zestawy
+        <select id="set-list"><option value="">— wybierz zapisany zestaw —</option></select>
+      </label>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn" id="btn-save">Zapisz zestaw</button>
+      <button type="button" class="btn ghost" id="btn-new">Nowy zestaw</button>
+      <button type="button" class="btn warn" id="btn-del">Usuń zapis</button>
+      <button type="button" class="btn ghost" id="btn-export">Eksportuj do pliku</button>
+      <button type="button" class="btn ghost" id="btn-import">Importuj z pliku</button>
+      <input type="file" id="import-file" accept=".json,application/json" hidden>
+    </div>
+    <p class="status" id="st-set"></p>
+  </section>
+
+  <section class="panel">
+    <h2>2. Udostępnij <small>– gość dostaje tylko to łącze i samo oglądanie</small></h2>
+    <div class="actions">
+      <button type="button" class="btn" id="btn-preview">Podgląd strony gościa</button>
+      <button type="button" class="btn ghost" id="btn-copy">Kopiuj łącze</button>
+      <button type="button" class="btn fb" id="btn-fb">Udostępnij na Facebooku</button>
+    </div>
+    <label class="fld" style="margin-top:10px">Łącze do zestawu
+      <textarea id="share-link" readonly></textarea>
+    </label>
+    <p class="status" id="st-share"></p>
+  </section>
+
+  <section class="panel">
+    <h2>3. Dodaj linki <small>– albumy Google Foto albo pokazy z GitHuba</small></h2>
+    <label class="fld">Wklej jeden albo wiele linków (każdy w nowej linii)
+      <textarea id="in-links" rows="3" placeholder="https://photos.app.goo.gl/…&#10;https://gladiator2201.github.io/…"></textarea>
+    </label>
+    <div class="actions"><button type="button" class="btn" id="btn-add">Dodaj linki</button></div>
+    <p class="status" id="st-add"></p>
+    <div id="extra-list"></div>
+  </section>
+
+  <section class="panel" id="sel-panel">
+    <h2>4. Wybór albumów <small>– wszystkie są zaznaczone; odznacz te, których ma nie być</small></h2>
+    <div class="selbar">
+      <span class="sum" id="sum">…</span>
+      <input type="search" id="in-search" placeholder="Szukaj (np. Lwówek, Zosia, 2010 07)…" autocomplete="off">
+      <button type="button" class="btn ghost" id="btn-all">Zaznacz wszystkie</button>
+      <button type="button" class="btn ghost" id="btn-none">Odznacz wszystkie</button>
+      <button type="button" class="btn ghost" id="btn-vis-on" title="Dotyczy tylko albumów pasujących do wyszukiwania">Zaznacz znalezione</button>
+      <button type="button" class="btn ghost" id="btn-vis-off" title="Dotyczy tylko albumów pasujących do wyszukiwania">Odznacz znalezione</button>
+    </div>
+    <div id="years"></div>
+  </section>
+</main>
+<script src="common.js?v=20261124b"></script>
+<script src="editor.js?v=20261124b"></script>
+</body>
+</html>
