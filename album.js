@@ -18,10 +18,16 @@
       $("cs-again").onclick = function () { location.href = a.u; };
       return;
     }
-    var play = function () { $("cover-screen").hidden = true; window.AlbumPlayer.open(a, $("cs-again"), { single: true, onClose: function () { $("cover-screen").hidden = false; } }); };
+    var play = function () {
+      $("cover-screen").hidden = true;
+      var m = "";
+      try { m = new URLSearchParams(location.search).get("m") || ""; } catch (e) {}
+      window.AlbumPlayer.open(a, $("cs-again"), { single: true, m: m, onClose: function () { $("cover-screen").hidden = false; } });
+    };
     $("cs-again").onclick = play;
     play();
   }
+  A.loadMusicCatalog();
   if (window.ALBUM) return start(window.ALBUM);
   var n = parseInt(new URLSearchParams(location.search).get("n") || new URLSearchParams(location.search).get("album"), 10);
   A.loadCatalog().then(function (c) { start(c.byN[n]); }).catch(function () { start(null); });

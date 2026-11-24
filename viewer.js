@@ -4,9 +4,10 @@
   var A = window.Albumy, esc = A.esc;
   var $ = function (id) { return document.getElementById(id); };
   var gallery = $("gallery"), bubble = $("bubble"), popup = $("popup");
-  var list = [], payload = "", bubbleFor = null, lastPointer = "mouse", holdUntil = 0;
+  var list = [], payload = "", bubbleFor = null, lastPointer = "mouse", holdUntil = 0, setMuz = null;
 
   function render(set, cat) {
+    setMuz = set.muz || null;
     list = A.resolveSet(cat, set);
     if (set.t) { $("title").textContent = set.t; document.title = set.t + " · Wszystko co Nasze"; }
     if (set.d) { $("dedication").textContent = set.d; $("dedication").hidden = false; document.title = set.d + " · " + document.title; }
@@ -74,7 +75,7 @@
   function hasPlayer(a) { return a && a.f > 0 && window.AlbumPlayer; }
   function openAlbum(i, from) {
     var a = list[i]; if (!hasPlayer(a)) return false;
-    hideBubble(); window.AlbumPlayer.open(a, from); return true;
+    hideBubble(); window.AlbumPlayer.open(a, from, { muz: setMuz }); return true;
   }
   gallery.addEventListener("click", function (e) {
     var t = e.target.closest(".tile"); if (!t) return;
@@ -170,7 +171,7 @@
 
   /* ---- start ---- */
   payload = A.payloadFromLocation();
-  Promise.all([A.loadCatalog(), A.decodeSet(payload)]).then(function (r) {
+  Promise.all([A.loadCatalog(), A.decodeSet(payload), A.loadMusicCatalog()]).then(function (r) {
     var cat = r[0], set = r[1];
     if (!set) { gallery.innerHTML = ""; $("empty-msg").hidden = false; $("count").textContent = ""; return; }
     render(set, cat);

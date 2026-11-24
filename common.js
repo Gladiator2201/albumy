@@ -1,7 +1,7 @@
 /* Albumy – wspólne funkcje (katalog, okładki, łącza do udostępniania) */
 (function (global) {
   "use strict";
-  var VER = "20261124f";
+  var VER = "20261124g";
   var CANONICAL = "https://gladiator2201.github.io/albumy/";
   var LH3 = "https://lh3.googleusercontent.com/pw/";
   var catalog = null;
@@ -113,10 +113,174 @@
     return new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer().then(function (a) { return new Uint8Array(a); });
   }
 
+
+  /* ---- muzyka (YouTube / Dysk Google) ---- */
+  function parseYtId(s) {
+    s = String(s || "").trim();
+    var m = s.match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:[^#]*&)?v=|embed\/|shorts\/|live\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+    if (m) return m[1];
+    if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
+    return "";
+  }
+  function parseDriveId(s) {
+    s = String(s || "").trim();
+    if (/^d:/.test(s)) s = s.slice(2);
+    var m = s.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || s.match(/[?&#]id=([A-Za-z0-9_-]+)/);
+    if (m) return m[1];
+    if (/^[A-Za-z0-9_-]{16,}$/.test(s) && !/^https?:/i.test(s)) return s;
+    return "";
+  }
+  function parseMusicLink(u) {
+    u = normUrl(u);
+    if (!u) return null;
+    if (/youtu(\.be|be\.com|be-nocookie\.com)/i.test(u) || /^[A-Za-z0-9_-]{11}$/.test(u)) {
+      var y = parseYtId(u); return y ? { k: "yt", id: y } : null;
+    }
+    if (/drive\.google\.com|docs\.google\.com|drive\.usercontent\.google\.com|^d:/.test(u) || /^[A-Za-z0-9_-]{16,}$/.test(u)) {
+      var d = parseDriveId(u); return d ? { k: "d", id: d } : null;
+    }
+    return null;
+  }
+  function musicParam(tr) { return tr.k === "d" ? "d:" + tr.id : tr.id; }
+  function parseMusicParam(m) {
+    m = String(m || "").trim();
+    if (!m) return null;
+    if (/^d:/.test(m)) return { k: "d", id: m.slice(2) };
+    if (/^yt:/.test(m)) return { k: "yt", id: m.slice(3) };
+    return parseMusicLink(m);
+  }
+  function musicKey(tr) { return (tr.k || "yt") + ":" + tr.id; }
+  function driveStreamUrls(id) {
+    id = encodeURIComponent(id);
+    return [
+      "https://drive.usercontent.google.com/download?id=" + id + "&export=download",
+      "https://drive.google.com/uc?export=download&id=" + id,
+      "https://docs.google.com/uc?export=download&id=" + id
+    ];
+  }
+  function drivePreviewUrl(id) { return "https://drive.google.com/file/d/" + encodeURIComponent(id) + "/preview"; }
+  function fmtDur(s) {
+    s = Math.round(+s || 0); if (!s) return "";
+    var m = Math.floor(s / 60), sec = s % 60;
+    return m + ":" + (sec < 10 ? "0" : "") + sec;
+  }
+  function fetchMusicTitle(tr) {
+    if (tr.k === "yt") {
+      var url = "https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + tr.id);
+      return fetch(url).then(function (r) { if (!r.ok) throw new Error("oembed " + r.status); return r.json(); })
+        .then(function (j) { return (j && j.title) || ""; })
+        .catch(function () { return ""; });
+    }
+    if (tr.k === "d") {
+      function cleanName(name) {
+        name = String(name || "").trim();
+        name = name.replace(/\s*[-–—]\s*Google Drive\s*$/i, "");
+        return name.replace(/\.(mp3|m4a|wav|ogg|aac|flac)$/i, "").trim();
+      }
+      return fetch("https://api.microlink.io/?url=" + encodeURIComponent("https://drive.google.com/file/d/" + tr.id + "/view")).then(function (r) { return r.json(); }).then(function (j) {
+        return cleanName((j && j.data && j.data.title) || "");
+      }).catch(function () { return ""; });
+    }
+    return Promise.resolve("");
+  }
+
+  var musicCat = null;
+  function normTrack(t) {
+    if (!t) return null;
+    if (Array.isArray(t)) t = { k: t[0], id: t[1], t: t[2], n: t[3] };
+    if (!t.k || !t.id) {
+      var p = parseMusicLink(t.u || t.url || t.id); if (!p) return null;
+      t = { k: p.k, id: p.id, t: t.t || t.tytul || "", n: t.n || t.album };
+    }
+    var out = { k: t.k, id: String(t.id), t: t.t || "" };
+    if (t.s) out.s = +t.s;
+    if (t.w) out.w = t.w;
+    if (t.embed === 0 || t.embed === false) out.embed = 0;
+    if (t.short) out.short = 1;
+    if (t.n) out.n = +t.n;
+    return out;
+  }
+  function loadMusicCatalog() {
+    if (musicCat) return Promise.resolve(musicCat);
+    return fetch((global.ALBUMY_BASE || "") + "data/muzyka.json?v=" + VER).then(function (r) {
+      if (!r.ok) throw new Error("muzyka " + r.status);
+      return r.json();
+    }).then(function (j) {
+      var tracks = (j.tracks || []).map(normTrack).filter(Boolean);
+      musicCat = { zrodlo: j.zrodlo || j.channel || "", tracks: tracks, byKey: {} };
+      tracks.forEach(function (t) { musicCat.byKey[musicKey(t)] = t; });
+      return musicCat;
+    }).catch(function () {
+      musicCat = { zrodlo: "", tracks: [], byKey: {} };
+      return musicCat;
+    });
+  }
+  function catalogPlayable() {
+    return ((musicCat && musicCat.tracks) || []).filter(function (t) { return t.embed !== 0; });
+  }
+  function packMusicList(list) {
+    return unpackMusicList(list).map(function (t) {
+      var a = [t.k, t.id, t.t || ""];
+      if (t.n) a.push(+t.n);
+      return a;
+    });
+  }
+  function unpackMusicList(x) { return (x || []).map(normTrack).filter(Boolean); }
+  /* brak pola muz = cała lista z katalogu; {off,x} = odznaczone z katalogu + dopisane; tablica = lista jawna */
+  function packSetMusic(muz) {
+    if (!muz) return undefined;
+    if (Array.isArray(muz)) return muz.length ? packMusicList(muz) : { off: ["*"] };
+    var o = {};
+    if (muz.explicit) return (muz.x && muz.x.length) ? packMusicList(muz.x) : { off: ["*"] };
+    if (muz.off && muz.off.length) o.off = muz.off.slice();
+    if (muz.x && muz.x.length) o.x = packMusicList(muz.x);
+    if (!o.off && !o.x) return undefined;
+    return o;
+  }
+  function unpackSetMusic(p) {
+    if (p == null) return null;
+    if (Array.isArray(p)) return { off: [], x: unpackMusicList(p), explicit: true };
+    return { off: p.off || [], x: unpackMusicList(p.x) };
+  }
+  function resolveMusic(setMuz, albumN, mParam) {
+    var cat = catalogPlayable(), off = {}, extras = [], explicit = false;
+    if (setMuz && setMuz.explicit) { explicit = true; extras = (setMuz.x || []).slice(); }
+    else if (setMuz) {
+      (setMuz.off || []).forEach(function (id) { off[id] = 1; });
+      extras = (setMuz.x || []).slice();
+    }
+    var list = [], seen = {};
+    function add(t) {
+      if (!t || t.embed === 0) return;
+      var k = musicKey(t);
+      if (seen[k]) return;
+      seen[k] = 1;
+      list.push(t);
+    }
+    if (explicit) extras.forEach(add);
+    else {
+      if (!off["*"]) cat.forEach(function (t) { if (!off[t.id] && !off[musicKey(t)]) add(t); });
+      extras.forEach(function (t) {
+        if (t.n && albumN != null && +t.n !== +albumN) return;
+        add(t);
+      });
+    }
+    var sel = 0;
+    if (mParam && mParam.id) {
+      var already = -1, i;
+      for (i = 0; i < list.length; i++) if (list[i].k === mParam.k && list[i].id === mParam.id) { already = i; break; }
+      if (already >= 0) sel = already;
+      else { list.unshift({ k: mParam.k, id: mParam.id, t: mParam.t || "" }); sel = 0; }
+    }
+    return { tracks: list, sel: sel };
+  }
+
   /* zestaw: {d: dedykacja, t: tytuł, ids: [numery z katalogu], x: [{u,t,c}] dodane spoza katalogu} */
   function encodeSet(set) {
     var p = { v: 1, d: set.d || "", t: set.t || "", m: idsToMask(set.ids || []) };
     if (set.x && set.x.length) p.x = set.x.map(function (a) { return [a.u, a.t || "", packCover(a.c)]; });
+    var muz = packSetMusic(set.muz);
+    if (muz) p.muz = muz;
     var bytes = new TextEncoder().encode(JSON.stringify(p));
     var plain = "j." + b64e(bytes);
     if (typeof CompressionStream === "undefined") return Promise.resolve(plain);
@@ -137,7 +301,8 @@
       return {
         d: p.d || "", t: p.t || "",
         ids: p.m ? maskToIds(p.m) : [],
-        x: (p.x || []).map(function (a) { return { u: a[0], t: a[1], c: a[2] }; })
+        x: (p.x || []).map(function (a) { return { u: a[0], t: a[1], c: a[2] }; }),
+        muz: unpackSetMusic(p.muz)
       };
     }).catch(function () { return null; });
   }
@@ -188,6 +353,12 @@
     loadCatalog: loadCatalog, findInCatalog: findInCatalog,
     idsToMask: idsToMask, maskToIds: maskToIds, encodeSet: encodeSet, decodeSet: decodeSet,
     payloadFromLocation: payloadFromLocation, shareUrl: shareUrl, albumUrl: albumUrl, facebookUrl: facebookUrl, openFacebook: openFacebook,
-    resolveSet: resolveSet, yearOf: yearOf, plural: plural
+    resolveSet: resolveSet, yearOf: yearOf, plural: plural,
+    parseYtId: parseYtId, parseDriveId: parseDriveId, parseMusicLink: parseMusicLink,
+    musicParam: musicParam, parseMusicParam: parseMusicParam, musicKey: musicKey,
+    driveStreamUrls: driveStreamUrls, drivePreviewUrl: drivePreviewUrl, fmtDur: fmtDur,
+    fetchMusicTitle: fetchMusicTitle, loadMusicCatalog: loadMusicCatalog, catalogPlayable: catalogPlayable,
+    packSetMusic: packSetMusic, unpackSetMusic: unpackSetMusic, resolveMusic: resolveMusic,
+    packMusicList: packMusicList, unpackMusicList: unpackMusicList, normTrack: normTrack
   };
 })(window);

@@ -9,7 +9,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M10 15h80a8 8 0 0 1 8 8v40a8 8 0 0 1-8 8H45L25 90V71H10a8 8 0 0 1-8-8V23a8 8 0 0 1 8-8z' fill='%23fff' stroke='%23111' stroke-width='6'/%3E%3Ccircle cx='32' cy='43' r='6'/%3E%3Ccircle cx='50' cy='43' r='6'/%3E%3Ccircle cx='68' cy='43' r='6'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Patrick+Hand&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261124f">
+<link rel="stylesheet" href="style.css?v=20261124g">
 </head>
 <body class="editor">
 <header class="hero">
@@ -42,8 +42,29 @@
     <p class="status" id="st-set"></p>
   </section>
 
+  <section class="panel" id="muz-panel">
+    <h2>2. Muzyka <small>– z kanału YouTube @niepale, w tle podczas oglądania zdjęć</small></h2>
+    <div class="selbar">
+      <span class="sum" id="muz-sum">…</span>
+      <input type="search" id="in-muz-search" placeholder="Szukaj utworu…" autocomplete="off">
+      <button type="button" class="btn ghost" id="btn-muz-all">Zaznacz wszystkie</button>
+      <button type="button" class="btn ghost" id="btn-muz-none">Odznacz wszystkie</button>
+    </div>
+    <div id="muz-cat"></div>
+    <label class="fld" style="margin-top:12px">Dodatkowe linki (YouTube albo plik MP3 z Dysku Google – każdy w nowej linii)
+      <textarea id="in-muz" rows="2" placeholder="https://www.youtube.com/watch?v=…&#10;https://drive.google.com/file/d/…/view"></textarea>
+    </label>
+    <div class="actions">
+      <button type="button" class="btn" id="btn-muz-add">Dodaj linki</button>
+      <button type="button" class="btn ghost" id="btn-muz-default">Ustaw jako domyślną</button>
+    </div>
+    <p class="note">Gość sam włącza muzykę przyciskiem ♪ w odtwarzaczu. Odznacz utwory, których nie chcesz w tym zestawie (tak samo jak albumy). Dodane linki zapisują się w łączu zestawu i w pliku JSON. „Ustaw jako domyślną” pobiera plik <code>muzyka.json</code> – żeby stał się listą na stronie, wgraj go do folderu <code>data/</code> w repozytorium (albo wyślij mi ten plik, a ja go wgram).</p>
+    <p class="status" id="st-muz"></p>
+    <div id="muz-extra"></div>
+  </section>
+
   <section class="panel">
-    <h2>2. Udostępnij <small>– gość dostaje tylko to łącze i samo oglądanie</small></h2>
+    <h2>3. Udostępnij <small>– gość dostaje tylko to łącze i samo oglądanie</small></h2>
     <div class="actions">
       <button type="button" class="btn" id="btn-preview">Podgląd strony gościa</button>
       <button type="button" class="btn ghost" id="btn-copy">Kopiuj łącze</button>
@@ -56,7 +77,7 @@
   </section>
 
   <section class="panel">
-    <h2>3. Dodaj linki <small>– albumy Google Foto albo pokazy z GitHuba</small></h2>
+    <h2>4. Dodaj linki <small>– albumy Google Foto albo pokazy z GitHuba</small></h2>
     <label class="fld">Wklej jeden albo wiele linków (każdy w nowej linii)
       <textarea id="in-links" rows="3" placeholder="https://photos.app.goo.gl/…&#10;https://gladiator2201.github.io/…"></textarea>
     </label>
@@ -67,7 +88,7 @@
   </section>
 
   <section class="panel" id="sel-panel">
-    <h2>4. Wybór albumów <small>– wszystkie są zaznaczone; odznacz te, których ma nie być</small></h2>
+    <h2>5. Wybór albumów <small>– wszystkie są zaznaczone; odznacz te, których ma nie być</small></h2>
     <div class="selbar">
       <span class="sum" id="sum">…</span>
       <input type="search" id="in-search" placeholder="Szukaj (np. Lwówek, Zosia, 2010 07)…" autocomplete="off">
@@ -79,9 +100,9 @@
     <div id="years"></div>
   </section>
 </main>
-<script src="common.js?v=20261124f"></script>
-<script src="qrcode.min.js?v=20261124f"></script>
-<script src="player.js?v=20261124f"></script>
-<script src="editor.js?v=20261124f"></script>
+<script src="common.js?v=20261124g"></script>
+<script src="qrcode.min.js?v=20261124g"></script>
+<script src="player.js?v=20261124g"></script>
+<script src="editor.js?v=20261124g"></script>
 </body>
 </html>
