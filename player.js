@@ -137,7 +137,7 @@
     el.classList.toggle("single", !!opts.single);
     el.querySelector(".pl-sharebox").hidden = true;
     stopMuz(true);
-    muzTrack = null; muzParam = A.parseMusicParam(opts.m || opts.mParam || "");
+    muzTrack = null; muzSrc = ""; muzParam = A.parseMusicParam(opts.m || opts.mParam || "");
     prepareMusic(a, opts);
     armMuzGesture();
     var my = ++reqId;
@@ -247,12 +247,12 @@
   /* ---- udostępnianie: link + kod QR ---- */
   function albumLink() {
     var u = A.albumUrl(album.n);
-    if (muzTrack) u += "?m=" + encodeURIComponent(A.musicParam(muzTrack));
+    if (muzTrack && muzSrc && muzSrc !== "default") u += "?m=" + encodeURIComponent(A.musicParam(muzTrack));
     return u;
   }
 
   /* ---- muzyka w tle: jeden wybrany utwór, pętla, przełącznik wł./wył. ---- */
-  var muzTrack = null, muzPlaying = false, muzParam = null, ytPlayer = null, ytReady = null, muzVol = 70, muzWant = 0, muzArmed = false;
+  var muzTrack = null, muzSrc = "", muzPlaying = false, muzParam = null, ytPlayer = null, ytReady = null, muzVol = 70, muzWant = 0, muzArmed = false;
   function muzPreferredOn() {
     try { return localStorage.getItem("albumy.muzyka.on") === "1"; } catch (e) { return false; }
   }
@@ -263,6 +263,7 @@
     A.loadMusicCatalog().then(function () {
       var r = A.resolveMusic(o.muz != null ? o.muz : null, a && a.n, muzParam);
       muzTrack = r.track || null;
+      muzSrc = r.src || "";
       if (muzTrack && !muzTrack.t) {
         A.fetchMusicTitle(muzTrack).then(function (t) { if (t && muzTrack) { muzTrack.t = t; paintMuzBtn(); } });
       }
@@ -516,6 +517,7 @@
       var t = muzTrack;
       return {
         hidden: !t,
+        src: muzSrc || "",
         preferred: muzPreferredOn(),
         playing: !!muzPlaying,
         kind: t ? t.k : "",

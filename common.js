@@ -1,7 +1,7 @@
 /* Albumy – wspólne funkcje (katalog, okładki, łącza do udostępniania) */
 (function (global) {
   "use strict";
-  var VER = "20261125a";
+  var VER = "20261125b";
   var CANONICAL = "https://gladiator2201.github.io/albumy/";
   var LH3 = "https://lh3.googleusercontent.com/pw/";
   var catalog = null;
@@ -207,8 +207,15 @@
       return r.json();
     }).then(function (j) {
       var tracks = (j.tracks || []).map(normTrack).filter(Boolean);
-      musicCat = { zrodlo: j.zrodlo || j.channel || "", tracks: tracks, byKey: {}, domyslny: normTrack(j.domyslny || j.default) || null };
+      musicCat = { zrodlo: j.zrodlo || j.channel || "", tracks: tracks, byKey: {}, domyslny: null };
       tracks.forEach(function (t) { musicCat.byKey[musicKey(t)] = t; });
+      var d = normTrack(j.domyslny || j.default);
+      if (d && musicCat.byKey[musicKey(d)]) {
+        var hit = musicCat.byKey[musicKey(d)];
+        if (!d.t) d.t = hit.t;
+        if (!d.s && hit.s) d.s = hit.s;
+      }
+      musicCat.domyslny = d || null;
       return musicCat;
     }).catch(function () {
       musicCat = { zrodlo: "", tracks: [], byKey: {}, domyslny: null };
@@ -289,16 +296,17 @@
   function resolveMusic(setMuz, albumN, mParam) {
     var muz = setMuz;
     if (muz && !muz.track && !muz.albums && (muz.off || muz.x || muz.explicit || Array.isArray(muz))) muz = unpackSetMusic(muz);
-    var track = null;
+    var track = null, src = "";
     if (mParam && mParam.id) {
       track = normTrack(mParam);
       if (track && !track.t && musicCat && musicCat.byKey[musicKey(track)]) track.t = musicCat.byKey[musicKey(track)].t;
-    } else if (muz && albumN != null && muz.albums && muz.albums[albumN]) track = muz.albums[albumN];
-    else if (muz && muz.track) track = muz.track;
-    else if (musicCat && musicCat.domyslny) track = musicCat.domyslny;
+      src = "param";
+    } else if (muz && albumN != null && muz.albums && muz.albums[albumN]) { track = muz.albums[albumN]; src = "album"; }
+    else if (muz && muz.track) { track = muz.track; src = "set"; }
+    else if (musicCat && musicCat.domyslny) { track = musicCat.domyslny; src = "default"; }
     track = normTrack(track);
     var list = track ? [track] : [];
-    return { track: track || null, tracks: list, sel: 0 };
+    return { track: track || null, tracks: list, sel: 0, src: track ? src : "" };
   }
 
   /* zestaw: {d: dedykacja, t: tytuł, ids: [numery z katalogu], x: [{u,t,c}] dodane spoza katalogu} */

@@ -533,7 +533,9 @@
       ch.classList.add("on");
       if (clr) clr.hidden = false;
     } else {
-      ch.textContent = "Nie wybrano jeszcze utworu dla tego zestawu – gość nie zobaczy przycisku muzyki.";
+      ch.textContent = muzCat.domyslny
+        ? ("Nie wybrano jeszcze utworu dla tego zestawu – gość usłyszy utwór domyślny strony: " + trackLabel(muzCat.domyslny) + ". Może go tylko włączyć albo wyłączyć.")
+        : "Nie wybrano jeszcze utworu dla tego zestawu – gość nie zobaczy przycisku muzyki.";
       ch.classList.remove("on");
       if (clr) clr.hidden = true;
     }
