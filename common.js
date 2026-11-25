@@ -1,7 +1,7 @@
 /* Albumy – wspólne funkcje (katalog, okładki, łącza do udostępniania) */
 (function (global) {
   "use strict";
-  var VER = "20261124g";
+  var VER = "20261125a";
   var CANONICAL = "https://gladiator2201.github.io/albumy/";
   var LH3 = "https://lh3.googleusercontent.com/pw/";
   var catalog = null;
@@ -207,11 +207,11 @@
       return r.json();
     }).then(function (j) {
       var tracks = (j.tracks || []).map(normTrack).filter(Boolean);
-      musicCat = { zrodlo: j.zrodlo || j.channel || "", tracks: tracks, byKey: {} };
+      musicCat = { zrodlo: j.zrodlo || j.channel || "", tracks: tracks, byKey: {}, domyslny: normTrack(j.domyslny || j.default) || null };
       tracks.forEach(function (t) { musicCat.byKey[musicKey(t)] = t; });
       return musicCat;
     }).catch(function () {
-      musicCat = { zrodlo: "", tracks: [], byKey: {} };
+      musicCat = { zrodlo: "", tracks: [], byKey: {}, domyslny: null };
       return musicCat;
     });
   }
@@ -226,53 +226,79 @@
     });
   }
   function unpackMusicList(x) { return (x || []).map(normTrack).filter(Boolean); }
-  /* brak pola muz = cała lista z katalogu; {off,x} = odznaczone z katalogu + dopisane; tablica = lista jawna */
+  function packOneTrack(tr) {
+    tr = normTrack(tr);
+    return tr ? [tr.k, tr.id, tr.t || ""] : null;
+  }
+  /* muz w zestawie: jeden utwór (tablica [k,id,t]) albo {t, am} z utworami albumów.
+     Stare pliki: tablica wielu utworów albo {off,x} – bierzemy pierwszy wybrany utwór. */
   function packSetMusic(muz) {
     if (!muz) return undefined;
-    if (Array.isArray(muz)) return muz.length ? packMusicList(muz) : { off: ["*"] };
+    var track = muz.track, albums = muz.albums || {};
+    if (!track && !Object.keys(albums).length && (muz.off || muz.x || muz.explicit || Array.isArray(muz))) {
+      muz = unpackSetMusic(muz) || {};
+      track = muz.track; albums = muz.albums || {};
+    }
+    var t = packOneTrack(track), am = {}, n;
+    Object.keys(albums).forEach(function (n) {
+      var p = packOneTrack(albums[n]); if (p) am[n] = p;
+    });
+    if (t && !Object.keys(am).length) return t;
     var o = {};
-    if (muz.explicit) return (muz.x && muz.x.length) ? packMusicList(muz.x) : { off: ["*"] };
-    if (muz.off && muz.off.length) o.off = muz.off.slice();
-    if (muz.x && muz.x.length) o.x = packMusicList(muz.x);
-    if (!o.off && !o.x) return undefined;
-    return o;
+    if (t) o.t = t;
+    if (Object.keys(am).length) o.am = am;
+    return Object.keys(o).length ? o : undefined;
+  }
+  function looksLikeFullCatalog(list) {
+    var cat = catalogPlayable();
+    if (!list || !cat.length) return false;
+    if (list.length < Math.max(20, cat.length - 5)) return false;
+    var keys = {};
+    list.forEach(function (t) { t = normTrack(t); if (t) keys[musicKey(t)] = 1; });
+    var hit = 0;
+    cat.forEach(function (t) { if (keys[musicKey(t)]) hit++; });
+    return hit >= Math.min(list.length, cat.length) - 2;
   }
   function unpackSetMusic(p) {
     if (p == null) return null;
-    if (Array.isArray(p)) return { off: [], x: unpackMusicList(p), explicit: true };
-    return { off: p.off || [], x: unpackMusicList(p.x) };
+    function wrap(t, albums) { return { track: t || null, albums: albums || {} }; }
+    if (Array.isArray(p) && (p[0] === "yt" || p[0] === "d") && typeof p[1] === "string") return wrap(normTrack(p));
+    if (Array.isArray(p)) {
+      if (looksLikeFullCatalog(p)) return wrap(null);
+      var list = unpackMusicList(p);
+      return wrap(list[0] || null);
+    }
+    if (typeof p !== "object") return null;
+    if (p.t || p.am || p.track || p.albums) {
+      var albums = {}, src = p.am || p.albums || {};
+      Object.keys(src).forEach(function (n) { var t = normTrack(src[n]); if (t) albums[n] = t; });
+      return wrap(normTrack(p.t || p.track), albums);
+    }
+    if (p.off || p.x || p.explicit) {
+      var extras = unpackMusicList(p.x), picked = extras[0] || null;
+      if (!picked && (p.off || [])[0] !== "*") {
+        var off = {};
+        (p.off || []).forEach(function (id) { off[id] = 1; });
+        catalogPlayable().some(function (t) { if (!off[t.id] && !off[musicKey(t)]) { picked = t; return true; } });
+        if (picked && looksLikeFullCatalog(catalogPlayable().filter(function (t) { return !off[t.id]; }))) picked = null;
+      }
+      return wrap(picked);
+    }
+    return wrap(normTrack(p));
   }
   function resolveMusic(setMuz, albumN, mParam) {
-    var cat = catalogPlayable(), off = {}, extras = [], explicit = false;
-    if (setMuz && setMuz.explicit) { explicit = true; extras = (setMuz.x || []).slice(); }
-    else if (setMuz) {
-      (setMuz.off || []).forEach(function (id) { off[id] = 1; });
-      extras = (setMuz.x || []).slice();
-    }
-    var list = [], seen = {};
-    function add(t) {
-      if (!t || t.embed === 0) return;
-      var k = musicKey(t);
-      if (seen[k]) return;
-      seen[k] = 1;
-      list.push(t);
-    }
-    if (explicit) extras.forEach(add);
-    else {
-      if (!off["*"]) cat.forEach(function (t) { if (!off[t.id] && !off[musicKey(t)]) add(t); });
-      extras.forEach(function (t) {
-        if (t.n && albumN != null && +t.n !== +albumN) return;
-        add(t);
-      });
-    }
-    var sel = 0;
+    var muz = setMuz;
+    if (muz && !muz.track && !muz.albums && (muz.off || muz.x || muz.explicit || Array.isArray(muz))) muz = unpackSetMusic(muz);
+    var track = null;
     if (mParam && mParam.id) {
-      var already = -1, i;
-      for (i = 0; i < list.length; i++) if (list[i].k === mParam.k && list[i].id === mParam.id) { already = i; break; }
-      if (already >= 0) sel = already;
-      else { list.unshift({ k: mParam.k, id: mParam.id, t: mParam.t || "" }); sel = 0; }
-    }
-    return { tracks: list, sel: sel };
+      track = normTrack(mParam);
+      if (track && !track.t && musicCat && musicCat.byKey[musicKey(track)]) track.t = musicCat.byKey[musicKey(track)].t;
+    } else if (muz && albumN != null && muz.albums && muz.albums[albumN]) track = muz.albums[albumN];
+    else if (muz && muz.track) track = muz.track;
+    else if (musicCat && musicCat.domyslny) track = musicCat.domyslny;
+    track = normTrack(track);
+    var list = track ? [track] : [];
+    return { track: track || null, tracks: list, sel: 0 };
   }
 
   /* zestaw: {d: dedykacja, t: tytuł, ids: [numery z katalogu], x: [{u,t,c}] dodane spoza katalogu} */
@@ -359,6 +385,6 @@
     driveStreamUrls: driveStreamUrls, drivePreviewUrl: drivePreviewUrl, fmtDur: fmtDur,
     fetchMusicTitle: fetchMusicTitle, loadMusicCatalog: loadMusicCatalog, catalogPlayable: catalogPlayable,
     packSetMusic: packSetMusic, unpackSetMusic: unpackSetMusic, resolveMusic: resolveMusic,
-    packMusicList: packMusicList, unpackMusicList: unpackMusicList, normTrack: normTrack
+    packMusicList: packMusicList, unpackMusicList: unpackMusicList, packOneTrack: packOneTrack, looksLikeFullCatalog: looksLikeFullCatalog, normTrack: normTrack
   };
 })(window);

@@ -226,10 +226,7 @@ body.single{min-height:100vh;display:flex;align-items:center;justify-content:cen
 .mz-yt{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none;left:0;bottom:0}
 .mz-iframe{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;border:0;pointer-events:none}
 @media (max-width:700px){
-  .pl-muz .t{display:none}
-  .pl-muz{font-size:20px;padding:1px 10px}
-  .pl-muzbox{left:8px;right:8px;bottom:80px;width:auto}
-  .mz-card{width:100%}
+  .pl-muz{font-size:16px;padding:1px 8px}
 }
 
 /* ---- muzyka w edytorze ---- */
@@ -246,3 +243,17 @@ body.single{min-height:100vh;display:flex;align-items:center;justify-content:cen
 .mzrow.noembed .md{color:var(--red);opacity:1}
 #muz-extra .xrow{align-items:flex-start}
 #muz-extra .xsrc{font-size:14px;opacity:.7}
+
+/* ---- zapis JSON i wybór muzyki w edytorze ---- */
+.json-actions{margin-top:14px;gap:12px}
+.store-warn{display:block;background:#ffd9d9;border:3px solid var(--ink);padding:8px 14px;margin:10px 0 0;font-size:18px;color:#8a1010;box-shadow:3px 3px 0 var(--ink)}
+.store-warn[hidden]{display:none}
+.muz-chosen{background:#fff;border:3px solid var(--ink);padding:8px 14px;margin:0 0 10px;font-size:20px}
+.muz-chosen.on{background:#e7d4ff}
+button.mzrow{display:flex;width:100%;text-align:left;background:#fff;border:0;border-top:1px solid #eee;cursor:pointer;font:inherit;color:inherit}
+button.mzrow.pick{background:var(--yellow)}
+button.mzrow:hover:not([disabled]){background:#fff6cf}
+button.mzrow.pick:hover{background:var(--yellow)}
+.subh{font-family:Bangers,Impact,sans-serif;font-weight:400;letter-spacing:.04em;font-size:22px;margin:16px 0 8px}
+.mz-alb-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #ddd}
+.pl-muz[aria-pressed=true]{background:#c9a6ff}

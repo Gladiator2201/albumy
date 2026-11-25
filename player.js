@@ -30,7 +30,7 @@
       '<div class="pl-tools"><button type="button" class="pl-btn pl-play" aria-pressed="false" title="Pokaz slajdów (spacja)">▶<span class="t"> Pokaz</span></button>' +
       '<button type="button" class="pl-btn pl-fs" title="Pełny ekran (F)" aria-label="Pełny ekran">⛶<span class="t"> Pełny ekran</span></button>' +
       '<button type="button" class="pl-btn pl-order" hidden title="Zmień kolejność zdjęć">⇅<span class="t"> Od najnowszych</span></button>' +
-      '<button type="button" class="pl-btn pl-muz" aria-pressed="false" title="Muzyka w tle" aria-label="Muzyka">♪<span class="t"> Muzyka</span></button>' +
+      '<button type="button" class="pl-btn pl-muz" hidden aria-pressed="false" title="Włącz lub wyłącz muzykę">♪<span class="t"> Muzyka wył.</span></button>' +
       '<button type="button" class="pl-btn pl-fb" title="Udostępnij ten album na Facebooku">f<span class="t"> Facebook</span></button>' +
       '<button type="button" class="pl-btn pl-share" title="Link i kod QR do tego albumu">⤴<span class="t"> Udostępnij</span></button>' +
       '<button type="button" class="pl-btn pl-close" title="Zamknij (Esc)" aria-label="Zamknij">✕<span class="t"> Zamknij</span></button></div></div>' +
@@ -50,15 +50,8 @@
       '<button type="button" class="btn fb sb-fb">Facebook</button>' +
       '<button type="button" class="btn ghost sb-png">Pobierz QR</button></div>' +
       '<p class="sb-msg" aria-live="polite"></p><p class="sb-note">Ten link pokazuje tylko ten album – bez możliwości zmian.</p></div></div>' +
-      '<div class="pl-muzbox" hidden role="dialog" aria-label="Muzyka"><div class="mz-card">' +
-      '<div class="sb-head"><h3>Muzyka</h3><button type="button" class="x mz-x" aria-label="Zamknij">✕</button></div>' +
-      '<ul class="mz-list"></ul>' +
-      '<div class="mz-ctrl"><button type="button" class="pl-btn mz-pp" title="Odtwórz / pauza" aria-label="Odtwórz">▶</button>' +
-      '<button type="button" class="pl-btn mz-next" title="Następny utwór" aria-label="Następny utwór">⏭</button>' +
-      '<label class="mz-vol">🔊 <input type="range" min="0" max="100" value="70" aria-label="Głośność"></label></div>' +
-      '<p class="mz-now"></p><p class="mz-msg" aria-live="polite"></p></div>' +
-      '<div class="mz-yt" hidden></div><audio class="mz-audio" preload="none"></audio>' +
-      '<iframe class="mz-iframe" hidden allow="autoplay" title="Podgląd pliku z Dysku"></iframe></div>';
+      '<div class="mz-yt" hidden></div><audio class="mz-audio" preload="none" loop></audio>' +
+      '<iframe class="mz-iframe" hidden allow="autoplay" title="Podgląd pliku z Dysku"></iframe>';
     document.body.appendChild(el);
     var q = function (s) { return el.querySelector(s); };
     q(".pl-prev").addEventListener("click", function () { stopShow(); go(cur - 1); });
@@ -74,16 +67,7 @@
       q(".pl-order .t").textContent = newestFirst ? " Od najstarszych" : " Od najnowszych";
       buildStrip(); go(0);
     });
-    q(".pl-muz").addEventListener("click", toggleMuzBox);
-    q(".mz-x").addEventListener("click", closeMuzBox);
-    q(".mz-pp").addEventListener("click", toggleMuzPlay);
-    q(".mz-next").addEventListener("click", function () { muzSkip(1); });
-    q(".mz-list").addEventListener("click", function (e) {
-      var li = e.target.closest("li"); if (!li || li.classList.contains("empty")) return;
-      muzSel = +li.dataset.i; paintMuzList(); startMuz();
-    });
-    q(".mz-vol input").addEventListener("input", function () { setMuzVol(+this.value); });
-    try { var sv = parseInt(localStorage.getItem("albumy.muzyka.vol"), 10); if (sv >= 0 && sv <= 100) q(".mz-vol input").value = sv; } catch (e) {}
+    q(".pl-muz").addEventListener("click", function (e) { e.stopPropagation(); toggleMuz(); });
     q(".sb-x").addEventListener("click", closeShare);
     q(".pl-sharebox").addEventListener("click", function (e) { if (e.target === this) closeShare(); });
     q(".sb-copy").addEventListener("click", function () {
@@ -123,7 +107,6 @@
       if (!el || el.hidden) return;
       var k = e.key;
       if (!el.querySelector(".pl-sharebox").hidden) { if (k === "Escape") { e.preventDefault(); closeShare(); } return; }
-      if (!el.querySelector(".pl-muzbox").hidden && k === "Escape") { e.preventDefault(); closeMuzBox(); return; }
       if (k === "ArrowRight" || k === "PageDown") { e.preventDefault(); stopShow(); go(cur + 1); }
       else if (k === "ArrowLeft" || k === "PageUp") { e.preventDefault(); stopShow(); go(cur - 1); }
       else if (k === "Home") { e.preventDefault(); go(0); }
@@ -153,10 +136,10 @@
     el.querySelector(".pl-cap").hidden = true;
     el.classList.toggle("single", !!opts.single);
     el.querySelector(".pl-sharebox").hidden = true;
-    closeMuzBox();
     stopMuz(true);
-    muzTracks = []; muzSel = 0; muzParam = A.parseMusicParam(opts.m || opts.mParam || "");
+    muzTrack = null; muzParam = A.parseMusicParam(opts.m || opts.mParam || "");
     prepareMusic(a, opts);
+    armMuzGesture();
     var my = ++reqId;
     el.querySelector(".pl-title").textContent = a.t;
     el.querySelector(".pl-strip").innerHTML = "";
@@ -252,7 +235,7 @@
   }
   function close(fromPop) {
     if (!el || el.hidden) return;
-    stopShow(); reqId++; closeShare(); closeMuzBox(); stopMuz(true);
+    stopShow(); reqId++; closeShare(); stopMuz(true); disarmMuzGesture();
     if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
     el.hidden = true;
     document.body.classList.remove("noscroll");
@@ -264,69 +247,78 @@
   /* ---- udostępnianie: link + kod QR ---- */
   function albumLink() {
     var u = A.albumUrl(album.n);
-    if (muzPlaying && muzTracks[muzSel]) u += "?m=" + encodeURIComponent(A.musicParam(muzTracks[muzSel]));
+    if (muzTrack) u += "?m=" + encodeURIComponent(A.musicParam(muzTrack));
     return u;
   }
 
-  /* ---- muzyka w tle ---- */
-  var muzTracks = [], muzSel = 0, muzPlaying = false, muzParam = null, ytPlayer = null, ytReady = null, muzVol = 70, muzWant = 0;
+  /* ---- muzyka w tle: jeden wybrany utwór, pętla, przełącznik wł./wył. ---- */
+  var muzTrack = null, muzPlaying = false, muzParam = null, ytPlayer = null, ytReady = null, muzVol = 70, muzWant = 0, muzArmed = false;
+  function muzPreferredOn() {
+    try { return localStorage.getItem("albumy.muzyka.on") === "1"; } catch (e) { return false; }
+  }
+  function setMuzPreferred(on) {
+    try { localStorage.setItem("albumy.muzyka.on", on ? "1" : "0"); } catch (e) {}
+  }
   function prepareMusic(a, o) {
     A.loadMusicCatalog().then(function () {
       var r = A.resolveMusic(o.muz != null ? o.muz : null, a && a.n, muzParam);
-      muzTracks = r.tracks; muzSel = r.sel || 0;
-      if (muzParam && muzParam.id && (!muzTracks[muzSel] || !muzTracks[muzSel].t)) {
-        var tr = muzTracks[muzSel];
-        A.fetchMusicTitle(tr).then(function (t) { if (t && muzTracks[muzSel] === tr) { tr.t = t; paintMuzList(); } });
+      muzTrack = r.track || null;
+      if (muzTrack && !muzTrack.t) {
+        A.fetchMusicTitle(muzTrack).then(function (t) { if (t && muzTrack) { muzTrack.t = t; paintMuzBtn(); } });
       }
-      paintMuzList();
+      paintMuzBtn();
     });
   }
-  function muzBox() { return el && el.querySelector(".pl-muzbox"); }
-  function toggleMuzBox() {
-    var box = muzBox(); if (!box) return;
-    if (box.hidden) { closeShare(); box.hidden = false; paintMuzList(); el.querySelector(".mz-pp").focus({ preventScroll: true }); }
-    else closeMuzBox();
-  }
-  function closeMuzBox() { if (el) el.querySelector(".pl-muzbox").hidden = true; }
-  function paintMuzList() {
+  function paintMuzBtn() {
     if (!el) return;
-    var ul = el.querySelector(".mz-list"), empty = !muzTracks.length;
-    ul.innerHTML = empty
-      ? '<li class="empty">W tym zestawie nie ma jeszcze muzyki. W edytorze zaznacz utwory z kanału @niepale albo wklej link z YouTube lub z Dysku Google.</li>'
-      : muzTracks.map(function (t, i) {
-          var src = t.k === "d" ? "Dysk Google" : "YouTube";
-          var meta = [src, t.s ? A.fmtDur(t.s) : ""].filter(Boolean).join(" · ");
-          return '<li data-i="' + i + '" class="' + (i === muzSel ? "on" : "") + '" role="option" aria-selected="' + (i === muzSel) + '">' +
-            esc(t.t || (t.k === "d" ? "Plik z Dysku" : "Film z YouTube")) +
-            (meta ? '<span class="md">' + esc(meta) + "</span>" : "") + "</li>";
-        }).join("");
-    var on = muzTracks[muzSel];
-    el.querySelector(".mz-now").textContent = muzPlaying && on ? ("▶ " + (on.t || "")) : (on ? (on.t || "") : "");
-    el.querySelector(".mz-pp").textContent = muzPlaying ? "❚❚" : "▶";
-    el.querySelector(".mz-pp").setAttribute("aria-label", muzPlaying ? "Pauza" : "Odtwórz");
-    el.querySelector(".pl-muz").setAttribute("aria-pressed", muzPlaying ? "true" : "false");
-    var li = ul.querySelector("li.on");
-    if (li && !empty) try { li.scrollIntoView({ block: "nearest" }); } catch (e) {}
+    var b = el.querySelector(".pl-muz");
+    if (!muzTrack) { b.hidden = true; b.setAttribute("aria-pressed", "false"); return; }
+    b.hidden = false;
+    var on = muzPlaying || (muzPreferredOn() && !muzPlaying && muzArmed);
+    /* przycisk pokazuje stan docelowy: włączona, jeśli gra albo ma wystartować po pierwszym stuknięciu */
+    var want = muzPlaying || muzPreferredOn();
+    b.setAttribute("aria-pressed", want ? "true" : "false");
+    b.title = (muzTrack.t ? muzTrack.t + " – " : "") + (want ? "Wyłącz muzykę" : "Włącz muzykę");
+    var t = b.querySelector(".t");
+    if (t) t.textContent = want ? " Muzyka wł." : " Muzyka wył.";
+    b.setAttribute("aria-label", want ? "Muzyka włączona" : "Muzyka wyłączona");
   }
-  function setMuzVol(v) {
-    muzVol = Math.max(0, Math.min(100, +v || 0));
-    try { localStorage.setItem("albumy.muzyka.vol", String(muzVol)); } catch (e) {}
-    if (ytPlayer && ytPlayer.setVolume) try { ytPlayer.setVolume(muzVol); } catch (e) {}
-    var a = el.querySelector(".mz-audio"); if (a) a.volume = muzVol / 100;
+  function armMuzGesture() {
+    disarmMuzGesture();
+    if (!el) return;
+    muzArmed = true;
+    el.addEventListener("pointerdown", onMuzGesture, true);
+    el.addEventListener("keydown", onMuzGesture, true);
   }
-  function muzMsg(t) { var m = el.querySelector(".mz-msg"); if (m) m.textContent = t || ""; }
-  function toggleMuzPlay() { muzPlaying ? pauseMuz() : startMuz(); }
-  function muzSkip(dir) {
-    if (!muzTracks.length) return;
-    muzSel = (muzSel + dir + muzTracks.length) % muzTracks.length;
-    paintMuzList();
-    if (muzPlaying || muzWant) startMuz();
+  function disarmMuzGesture() {
+    muzArmed = false;
+    if (el) {
+      el.removeEventListener("pointerdown", onMuzGesture, true);
+      el.removeEventListener("keydown", onMuzGesture, true);
+    }
+  }
+  function onMuzGesture(e) {
+    if (!muzTrack || muzPlaying || !muzPreferredOn()) return;
+    if (e.type === "keydown" && e.key === "Escape") return;
+    if (e.target && e.target.closest && e.target.closest(".pl-muz,.pl-close")) return;
+    startMuz();
+  }
+  function toggleMuz() {
+    if (!muzTrack) return;
+    if (muzPreferredOn() || muzPlaying || muzWant) {
+      setMuzPreferred(false);
+      pauseMuz();
+    } else {
+      setMuzPreferred(true);
+      startMuz();
+    }
+    paintMuzBtn();
   }
   function pauseMuz() {
     muzWant = 0; muzPlaying = false;
     if (ytPlayer && ytPlayer.pauseVideo) try { ytPlayer.pauseVideo(); } catch (e) {}
-    var a = el.querySelector(".mz-audio"); if (a && !a.paused) a.pause();
-    paintMuzList();
+    var a = el && el.querySelector(".mz-audio"); if (a && !a.paused) a.pause();
+    paintMuzBtn();
   }
   function stopMuz(destroy) {
     muzWant = 0; muzPlaying = false;
@@ -342,7 +334,7 @@
     if (a) { try { a.pause(); a.removeAttribute("src"); a.load(); } catch (e) {} }
     var f = el && el.querySelector(".mz-iframe");
     if (f) { f.hidden = true; f.removeAttribute("src"); }
-    if (el) paintMuzList();
+    if (el) paintMuzBtn();
   }
   function ensureYT() {
     if (ytReady) return ytReady;
@@ -358,13 +350,13 @@
     return ytReady;
   }
   function startMuz() {
-    var tr = muzTracks[muzSel];
-    if (!tr) { muzMsg("Nie ma utworu do odtworzenia."); return; }
-    var my = ++muzWant;
-    muzMsg("");
-    setMuzVol(el.querySelector(".mz-vol input").value);
+    if (!muzTrack) return;
+    var my = ++muzWant, tr = muzTrack;
     if (tr.k === "d") playDrive(tr, my);
     else playYT(tr, my);
+  }
+  function loopYT(player) {
+    try { player.seekTo(0, true); player.playVideo(); } catch (e) {}
   }
   function playYT(tr, my) {
     var a = el.querySelector(".mz-audio"); if (a) { try { a.pause(); a.removeAttribute("src"); } catch (e) {} }
@@ -378,39 +370,39 @@
         host: "https://www.youtube-nocookie.com",
         videoId: tr.id,
         width: 1, height: 1,
-        playerVars: { autoplay: 1, controls: 0, disablekb: 1, fs: 0, modestbranding: 1, rel: 0, playsinline: 1, origin: location.origin },
+        playerVars: { autoplay: 1, controls: 0, disablekb: 1, fs: 0, modestbranding: 1, rel: 0, playsinline: 1, loop: 1, playlist: tr.id, origin: location.origin },
         events: {
           onReady: function (e) { if (my !== muzWant) return; try { e.target.setVolume(muzVol); e.target.playVideo(); } catch (ex) {} },
           onStateChange: function (e) {
             if (my !== muzWant) return;
-            if (e.data === 1) { muzPlaying = true; paintMuzList(); }
-            else if (e.data === 0) muzSkip(1);
-            else if (e.data === 2) { muzPlaying = false; paintMuzList(); }
+            if (e.data === 1) { muzPlaying = true; paintMuzBtn(); }
+            else if (e.data === 0) loopYT(e.target);
+            else if (e.data === 2) { muzPlaying = false; paintMuzBtn(); }
           },
           onError: function (e) {
             if (my !== muzWant) return;
             muzPlaying = false;
             var code = e && e.data, m = { 2: "Niepoprawny identyfikator filmu.", 5: "Błąd odtwarzacza YouTube.", 100: "Nie ma takiego filmu.", 101: "Właściciel filmu nie pozwala go osadzić na innej stronie.", 150: "Właściciel filmu nie pozwala go osadzić na innej stronie." };
-            muzMsg((m[code] || ("YouTube zgłosił błąd " + code)) + " Spróbuj następnego utworu albo innego linku.");
-            paintMuzList();
+            paintMuzBtn();
+            if (window.console) console.warn(m[code] || ("YouTube zgłosił błąd " + code));
           }
         }
       });
-    }).catch(function () { if (my === muzWant) muzMsg("Nie udało się wczytać odtwarzacza YouTube."); });
+    });
   }
   function playDrive(tr, my) {
     if (ytPlayer) { try { ytPlayer.stopVideo(); } catch (e) {} }
     var audio = el.querySelector(".mz-audio"), urls = A.driveStreamUrls(tr.id), i = 0;
     var f = el.querySelector(".mz-iframe"); if (f) { f.hidden = true; f.removeAttribute("src"); }
-    function ok() { if (my !== muzWant) return; muzPlaying = true; paintMuzList(); }
+    function ok() { if (my !== muzWant) return; muzPlaying = true; paintMuzBtn(); }
     function fail() {
       if (my !== muzWant) return;
       muzPlaying = false;
-      muzMsg("Nie udało się odtworzyć pliku z Dysku bezpośrednio. Próbuję podglądu Dysku (sterowanie może być ograniczone).");
-      paintMuzList();
-      if (f) { f.hidden = false; f.src = A.drivePreviewUrl(tr.id); muzPlaying = true; paintMuzList(); }
+      paintMuzBtn();
+      if (f) { f.hidden = false; f.src = A.drivePreviewUrl(tr.id); muzPlaying = true; paintMuzBtn(); }
     }
-    audio.onended = function () { if (my === muzWant) muzSkip(1); };
+    audio.loop = true;
+    audio.onended = function () { if (my === muzWant) { try { audio.currentTime = 0; audio.play(); } catch (e) {} } };
     audio.onplay = ok;
     audio.onplaying = ok;
     audio.onerror = function () {
@@ -467,7 +459,7 @@
   }
   function openShare() {
     if (!album || typeof qrcode !== "function") return;
-    stopShow(); closeMuzBox();
+    stopShow();
     var box = el.querySelector(".pl-sharebox");
     el.querySelector(".sb-t").textContent = album.t;
     var sl = el.querySelector(".sb-link"); sl.href = albumLink(); sl.textContent = albumLink();
@@ -521,17 +513,15 @@
 
   global.AlbumPlayer = { open: open, close: close, isOpen: function () { return !!el && !el.hidden; }, index: function () { return cur; }, count: function () { return photos.length; },
     musicState: function () {
-      var t = muzTracks[muzSel];
+      var t = muzTrack;
       return {
-        open: !!(el && muzBox() && !muzBox().hidden),
+        hidden: !t,
+        preferred: muzPreferredOn(),
         playing: !!muzPlaying,
         kind: t ? t.k : "",
         id: t ? t.id : "",
         title: t ? t.t : "",
-        index: muzSel,
-        count: muzTracks.length,
-        volume: muzVol,
-        param: t && muzPlaying ? A.musicParam(t) : "",
+        param: t ? A.musicParam(t) : "",
         ytState: ytPlayer && ytPlayer.getPlayerState ? ytPlayer.getPlayerState() : null
       };
     }
