@@ -5,7 +5,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var K_SETS = "albumy.zestawy.v1", K_WORK = "albumy.robocze.v1", K_LIB = "albumy.dodane.v1";
   var cat = null, sel = new Set(), lib = [], xon = new Set(), payload = "", loadedKey = "";
-  var muzCat = null, muzTrack = null, muzAlbums = {};
+  var muzCat = null, muzTracks = [], muzAlbums = {};
   var lower = {}, rendered = {};
 
   function status(id, msg, err) { var el = $(id); if (!el) return; el.textContent = msg || ""; el.classList.toggle("err", !!err); }
@@ -43,7 +43,7 @@
   function ded() { return $("in-ded").value.trim(); }
   function ttl() { return $("in-title").value.trim(); }
   function xList() { return lib.filter(function (a) { return xon.has(a.u); }).map(function (a) { return { u: a.u, t: a.t, c: a.c }; }); }
-  function curSet() { return { d: ded(), t: ttl(), ids: Array.from(sel).sort(function (a, b) { return a - b; }), x: xList(), muz: { track: muzTrack, albums: Object.assign({}, muzAlbums) } }; }
+  function curSet() { return { d: ded(), t: ttl(), ids: Array.from(sel).sort(function (a, b) { return a - b; }), x: xList(), muz: { track: muzTracks[0] || null, tracks: muzTracks.slice(), albums: Object.assign({}, muzAlbums) } }; }
 
   /* ---------- zapis roboczy i łącze ---------- */
   var tmr = null;
@@ -317,7 +317,7 @@
     $("in-ded").value = ""; $("in-title").value = ""; $("in-search").value = "";
     sel = new Set(cat.albums.map(function (a) { return a.n; }));
     xon = new Set(lib.map(function (a) { return a.u; }));
-    muzTrack = null; muzAlbums = {}; renderMuz();
+    muzTracks = []; muzAlbums = {}; renderMuz();
     loadedKey = ""; fillSetList(""); applySearch(); repaintAll();
     status("st-set", "Nowy zestaw: wszystkie albumy zaznaczone. Odznacz te, których ma nie być.");
   });
@@ -344,14 +344,20 @@
     return c.ids.map(function (n) { var a = cat.byN[n]; return { n: a.n, rok: a.y, tytul: a.t, link: a.u, okladka: A.coverUrl(a.c, 600) }; })
       .concat(c.x.map(function (a) { return { rok: A.yearOf(a), tytul: a.t, link: a.u, okladka: A.coverUrl(a.c, 600) }; }));
   }
+  function jsonOneOrList(x) {
+    var list = A.tracksOf(x);
+    if (!list.length) return null;
+    if (list.length === 1) return { k: list[0].k, id: list[0].id, t: list[0].t || "" };
+    return list.map(function (t) { return { k: t.k, id: t.id, t: t.t || "" }; });
+  }
   function packMuzJson(muz) {
     var u = A.unpackSetMusic(muz) || muz || {};
-    var o = {};
-    if (u.track) o.muzyka = { k: u.track.k, id: u.track.id, t: u.track.t || "" };
+    var o = {}, packed = jsonOneOrList(u.tracks && u.tracks.length ? u.tracks : u.track);
+    if (packed) o.muzyka = packed;
     var am = u.albums || {}, keys = Object.keys(am);
     if (keys.length) {
       o.muzykaAlbumow = {};
-      keys.forEach(function (n) { o.muzykaAlbumow[n] = { k: am[n].k, id: am[n].id, t: am[n].t || "" }; });
+      keys.forEach(function (n) { var v = jsonOneOrList(am[n]); if (v) o.muzykaAlbumow[n] = v; });
     }
     return o;
   }
@@ -372,8 +378,8 @@
   }
   function muzFromJson(j) {
     if (!j) return null;
-    if (j.muzykaAlbumow || (j.muzyka && !Array.isArray(j.muzyka))) {
-      return importMuz({ track: j.muzyka, albums: j.muzykaAlbumow || j.am });
+    if (j.muzykaAlbumow || j.am || j.muzyka || j.muz) {
+      return importMuz({ t: j.muzyka, am: j.muzykaAlbumow || j.am, tracks: j.muzyka, muz: j.muz });
     }
     return importMuz(j.muzyka || j.muz);
   }
@@ -393,7 +399,9 @@
   function countMsg(nAlb, nX, muz) {
     var t = nAlb + " " + A.plural(nAlb, "album", "albumy", "albumów");
     if (nX) t += " + " + nX + " " + A.plural(nX, "dodany", "dodane", "dodanych");
-    if (muz && muz.track) t += ", muzyka: " + trackLabel(muz.track);
+    var tracks = muz ? A.tracksOf(muz.tracks && muz.tracks.length ? muz.tracks : muz.track || muz) : [];
+    if (tracks.length === 1) t += ", muzyka: " + trackLabel(tracks[0]);
+    else if (tracks.length > 1) t += ", muzyka: " + tracks.length + " " + A.plural(tracks.length, "utwór", "utwory", "utworów");
     else t += ", bez muzyki";
     var na = muz && muz.albums ? Object.keys(muz.albums).length : 0;
     if (na) t += " (+ " + na + " " + A.plural(na, "album z własnym utworem", "albumy z własnym utworem", "albumów z własnym utworem") + ")";
@@ -506,8 +514,8 @@
 
   /* ---------- muzyka ---------- */
   function applyMuz(muz) {
-    var u = A.unpackSetMusic(muz) || { track: null, albums: {} };
-    muzTrack = u.track || null;
+    var u = A.unpackSetMusic(muz) || { track: null, tracks: [], albums: {} };
+    muzTracks = (u.tracks && u.tracks.length) ? u.tracks.slice() : (u.track ? [u.track] : []);
     muzAlbums = u.albums || {};
   }
   function importMuz(raw) {
@@ -528,8 +536,9 @@
   function renderMuz() {
     if (!muzCat) { $("muz-cat").innerHTML = ""; return; }
     var ch = $("muz-chosen"), clr = $("btn-muz-clear");
-    if (muzTrack) {
-      ch.innerHTML = "Muzyka tego zestawu: <b>" + A.esc(trackLabel(muzTrack)) + "</b>. Gość usłyszy ten utwór w pętli i może go tylko włączyć albo wyłączyć.";
+    if (muzTracks.length) {
+      var labels = muzTracks.map(function (t, i) { return (i + 1) + ". " + trackLabel(t); }).join(" · ");
+      ch.innerHTML = "Muzyka tego zestawu (" + muzTracks.length + "): <b>" + A.esc(labels) + "</b>. Gość usłyszy " + (muzTracks.length > 1 ? "te utwory po kolei, w pętli" : "ten utwór w pętli") + " i może tylko włączyć albo wyłączyć.";
       ch.classList.add("on");
       if (clr) clr.hidden = false;
     } else {
@@ -551,12 +560,13 @@
       if (!vis.length) return;
       html += '<details class="mz-year" open data-y="' + A.esc(y) + '"><summary><span>' + A.esc(y) + "</span><span class=\"yc\">" + vis.length + "</span></summary>";
       vis.forEach(function (t) {
-        var dis = t.embed === 0, on = !dis && muzTrack && A.musicKey(t) === A.musicKey(muzTrack);
+        var dis = t.embed === 0, ix = !dis ? trackIndex(t) : -1, on = ix >= 0;
         var meta = [];
         if (t.s) meta.push(A.fmtDur(t.s));
         if (t.short) meta.push("short");
         if (dis) meta.push("YouTube nie pozwala osadzić tego filmu na innej stronie");
         html += '<button type="button" class="mzrow' + (on ? " pick" : "") + (dis ? " noembed" : "") + '" data-id="' + A.esc(t.id) + '"' + (dis ? " disabled" : "") + ">" +
+          (on ? '<span class="mz-num">' + (ix + 1) + "</span>" : "") +
           '<span class="mt">' + A.esc(t.t) + (meta.length ? '<span class="md">' + A.esc(meta.join(" · ")) + "</span>" : "") + "</span></button>";
         shown++;
       });
@@ -580,13 +590,28 @@
     if (cur && selEl.querySelector('option[value="' + cur + '"]')) selEl.value = cur;
     var keys = Object.keys(muzAlbums).sort(function (a, b) { return a - b; });
     $("muz-alb-list").innerHTML = keys.map(function (n) {
-      var a = cat.byN[+n], t = muzAlbums[n];
-      return '<div class="mz-alb-row" data-n="' + A.esc(n) + '"><span>' + A.esc(a ? a.t : ("Album nr " + n)) + " — " + A.esc(trackLabel(t)) +
+      var a = cat.byN[+n], list = A.tracksOf(muzAlbums[n]);
+      var lab = list.length > 1 ? (list.length + " utwory: " + list.map(trackLabel).join(", ")) : (list[0] ? trackLabel(list[0]) : "");
+      return '<div class="mz-alb-row" data-n="' + A.esc(n) + '"><span>' + A.esc(a ? a.t : ("Album nr " + n)) + " — " + A.esc(lab) +
         '</span><button type="button" class="btn warn mz-alb-del">Usuń</button></div>';
     }).join("");
   }
-  function chooseTrack(tr, msg) {
-    muzTrack = A.normTrack(tr);
+  function trackIndex(tr) {
+    var k = A.musicKey(tr);
+    for (var i = 0; i < muzTracks.length; i++) if (A.musicKey(muzTracks[i]) === k) return i;
+    return -1;
+  }
+  function toggleTrack(tr, msg) {
+    tr = A.normTrack(tr); if (!tr) return;
+    var i = trackIndex(tr);
+    if (i >= 0) muzTracks.splice(i, 1);
+    else muzTracks.push(tr);
+    renderMuz(); changed();
+    if (msg) status("st-muz", msg);
+  }
+  function addTrack(tr, msg) {
+    tr = A.normTrack(tr); if (!tr) return;
+    if (trackIndex(tr) < 0) muzTracks.push(tr);
     renderMuz(); changed();
     if (msg) status("st-muz", msg);
   }
@@ -594,13 +619,16 @@
     var row = e.target.closest(".mzrow"); if (!row || row.disabled || row.classList.contains("noembed")) return;
     var t = muzCat.tracks.filter(function (x) { return x.id === row.dataset.id; })[0];
     if (!t || t.embed === 0) return;
-    chooseTrack(t, "Wybrany utwór zestawu: " + trackLabel(t) + ".");
+    var was = trackIndex(t) >= 0;
+    toggleTrack(t, was
+      ? ("Usunąłem z listy: " + trackLabel(t) + ".")
+      : ("Dodany jako " + muzTracks.length + ": " + trackLabel(t) + "."));
   });
   var mzQ = null;
   $("in-muz-search").addEventListener("input", function () { clearTimeout(mzQ); mzQ = setTimeout(function () { renderMuz(); }, 150); });
   $("btn-muz-clear").addEventListener("click", function () {
-    muzTrack = null; renderMuz(); changed();
-    status("st-muz", "Usunąłem muzykę zestawu. Gość nie zobaczy przycisku muzyki, chyba że album ma swój utwór albo jest utwór domyślny na stronie.");
+    muzTracks = []; renderMuz(); changed();
+    status("st-muz", "Usunąłem muzykę zestawu. Gość usłyszy utwór domyślny strony (jeśli jest), chyba że album ma własne utwory.");
   });
   $("btn-muz-add").addEventListener("click", function () {
     var links = A.extractLinks($("in-muz").value);
@@ -614,17 +642,19 @@
     (hit ? Promise.resolve(hit.t) : A.fetchMusicTitle(base)).then(function (t) {
       if (t) base.t = t;
       $("in-muz").value = ""; $("btn-muz-add").disabled = false;
-      chooseTrack(base, "Wybrany utwór zestawu: " + trackLabel(base) + (t ? "." : " (wpisz albo popraw tytuł, jeśli trzeba)."));
+      addTrack(base, "Dodany do listy: " + trackLabel(base) + (t ? "." : " (wpisz albo popraw tytuł, jeśli trzeba)."));
     });
   });
   $("btn-muz-alb").addEventListener("click", function () {
     var n = $("muz-alb-n").value;
     if (!n) return status("st-muz", "Najpierw wybierz album z listy.", true);
-    if (!muzTrack) return status("st-muz", "Najpierw wybierz utwór (kliknij w katalogu albo wklej link).", true);
-    muzAlbums[n] = { k: muzTrack.k, id: muzTrack.id, t: muzTrack.t || "" };
+    if (!muzTracks.length) return status("st-muz", "Najpierw wybierz utwory (kliknij w katalogu albo wklej link).", true);
+    muzAlbums[n] = muzTracks.length === 1
+      ? { k: muzTracks[0].k, id: muzTracks[0].id, t: muzTracks[0].t || "" }
+      : muzTracks.map(function (t) { return { k: t.k, id: t.id, t: t.t || "" }; });
     renderMuz(); changed();
     var a = cat.byN[+n];
-    status("st-muz", "Album „" + (a ? a.t : n) + "” będzie miał utwór: " + trackLabel(muzTrack) + ".");
+    status("st-muz", "Album „" + (a ? a.t : n) + "” będzie miał " + (muzTracks.length > 1 ? (muzTracks.length + " utwory") : "utwór") + ": " + muzTracks.map(trackLabel).join(", ") + ".");
   });
   $("muz-alb-list").addEventListener("click", function (e) {
     if (!e.target.classList.contains("mz-alb-del")) return;
@@ -633,17 +663,18 @@
     renderMuz(); changed();
   });
   $("btn-muz-default").addEventListener("click", function () {
-    if (!muzTrack) return status("st-muz", "Najpierw wybierz utwór, który ma być domyślny na stronie.", true);
+    if (muzTracks.length !== 1) return status("st-muz", "Do utworu domyślnego na stronie zaznacz dokładnie jeden utwór (kliknij nadmiarowe, żeby je odznaczyć).", true);
+    var def = muzTracks[0];
     var tracks = (muzCat ? muzCat.tracks : []).map(function (t) {
       var o = { k: t.k, id: t.id, t: t.t }; if (t.s) o.s = t.s; if (t.w) o.w = t.w; if (t.short) o.short = 1; if (t.embed === 0) o.embed = 0; return o;
     });
     var data = { v: 1, zrodlo: (muzCat && muzCat.zrodlo) || "https://www.youtube.com/@niepale",
-      domyslny: { k: muzTrack.k, id: muzTrack.id, t: muzTrack.t || "" }, tracks: tracks };
+      domyslny: { k: def.k, id: def.id, t: def.t || "" }, tracks: tracks };
     var blob = new Blob([JSON.stringify(data, null, 1)], { type: "application/json" });
     var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "muzyka.json";
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
-    status("st-muz", "Zapisałem plik muzyka.json z domyślnym utworem „" + (muzTrack.t || muzTrack.id) + "”. Żeby zaczął obowiązywać na stronie, wgraj go do folderu data/ w repozytorium (zastępując dotychczasowy plik) albo wyślij mi ten plik, a ja go wgram i opublikuję.");
+    status("st-muz", "Zapisałem plik muzyka.json z domyślnym utworem „" + (def.t || def.id) + "”. Żeby zaczął obowiązywać na stronie, wgraj go do folderu data/ w repozytorium (zastępując dotychczasowy plik) albo wyślij mi ten plik, a ja go wgram i opublikuję.");
   });
 
   /* ---------- udostępnianie ---------- */
@@ -678,7 +709,7 @@
     } else {
       sel = new Set(cat.albums.map(function (a) { return a.n; }));
       xon = new Set(lib.map(function (a) { return a.u; }));
-      muzTrack = null; muzAlbums = {};
+      muzTracks = []; muzAlbums = {};
     }
     renderMuz();
     fillSetList(loadedKey && sets()[loadedKey] ? loadedKey : "");

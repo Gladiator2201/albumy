@@ -8,11 +8,7 @@
   var SLIDE_MS = 4000;
 
   function full(u) { return /^https?:/.test(u) ? u : LH3 + u; }
-  function size() {
-    var dpr = Math.min(global.devicePixelRatio || 1, 2);
-    var w = Math.ceil(innerWidth * dpr / 400) * 400, h = Math.ceil(innerHeight * dpr / 300) * 300;
-    return "=w" + Math.min(w, 2560) + "-h" + Math.min(h, 1920);
-  }
+  /* size() – wymiar pod scenę, zdefiniowany przy odtwarzaczu zdjęć */
   function isG(p) { return !/^https?:/.test(p[0]) || /googleusercontent\.com\//.test(p[0]); }
   function big(p) { return isG(p) ? full(p[0]).replace(/=[^\/]*$/, "") + size() : p[0]; }
   function thumb(p) { return isG(p) ? full(p[0]).replace(/=[^\/]*$/, "") + "=w160-h160-c" : p[0].replace("/media/foto/", "/media/foto_mini/"); }
@@ -34,7 +30,9 @@
       '<button type="button" class="pl-btn pl-fb" title="Udostępnij ten album na Facebooku">f<span class="t"> Facebook</span></button>' +
       '<button type="button" class="pl-btn pl-share" title="Link i kod QR do tego albumu">⤴<span class="t"> Udostępnij</span></button>' +
       '<button type="button" class="pl-btn pl-close" title="Zamknij (Esc)" aria-label="Zamknij">✕<span class="t"> Zamknij</span></button></div></div>' +
-      '<div class="pl-stage"><img class="pl-img" alt="" referrerpolicy="no-referrer" draggable="false">' +
+      '<div class="pl-stage"><div class="pl-pics" aria-hidden="true">' +
+      '<img class="pl-img pl-img-a" alt="" referrerpolicy="no-referrer" draggable="false">' +
+      '<img class="pl-img pl-img-b" alt="" referrerpolicy="no-referrer" draggable="false"></div>' +
       '<a class="pl-video" target="_blank" rel="noopener" hidden>▶ Film – obejrzyj w Google Foto</a>' +
       '<p class="pl-msg" hidden></p>' +
       '<div class="pl-cap" hidden><b class="c-t"></b> <span class="c-d"></span><span class="c-o"></span></div>' +
@@ -84,9 +82,10 @@
     q(".pl-strip").addEventListener("click", function (e) {
       var t = e.target.closest(".pl-th"); if (t) { stopShow(); go(+t.dataset.i); }
     });
-    q(".pl-img").addEventListener("load", function () { el.classList.remove("loading"); });
-    q(".pl-img").addEventListener("error", function () { el.classList.remove("loading"); });
-    q(".pl-img").addEventListener("dblclick", toggleFs);
+    q(".pl-stage").addEventListener("dblclick", function (e) {
+      if (e.target.closest("button,a,.pl-cap")) return;
+      toggleFs();
+    });
     // przesuwanie palcem / myszą
     var sx = 0, sy = 0, st = 0, down = false;
     var stage = q(".pl-stage");
@@ -137,13 +136,13 @@
     el.classList.toggle("single", !!opts.single);
     el.querySelector(".pl-sharebox").hidden = true;
     stopMuz(true);
-    muzTrack = null; muzSrc = ""; muzParam = A.parseMusicParam(opts.m || opts.mParam || "");
+    muzTrack = null; muzTracks = []; muzSel = 0; muzSrc = ""; muzParam = A.parseMusicParam(opts.m || opts.mParam || "");
     prepareMusic(a, opts);
     armMuzGesture();
     var my = ++reqId;
     el.querySelector(".pl-title").textContent = a.t;
     el.querySelector(".pl-strip").innerHTML = "";
-    el.querySelector(".pl-img").removeAttribute("src");
+    resetPics();
     el.querySelector(".pl-count").textContent = "";
     msg("Ładuję zdjęcia…");
     el.hidden = false; el.classList.add("loading");
@@ -184,17 +183,104 @@
   }
   function msg(t) { var m = el.querySelector(".pl-msg"); m.textContent = t; m.hidden = !t; }
 
-  function go(i) {
-    if (!photos.length) return;
-    if (i < 0) i = photos.length - 1;
-    if (i >= photos.length) i = 0;
-    cur = i; show(true);
+  var FADE_S = 0.9, imgCache = {}, imgOrder = [], front = 0, showGen = 0, shownSrc = "", playing = false;
+
+  function pics() { return el ? [el.querySelector(".pl-img-a"), el.querySelector(".pl-img-b")] : []; }
+  function visImg() { return el && (el.querySelector(".pl-img.on") || pics()[front]); }
+  function resetPics() {
+    showGen++; shownSrc = ""; front = 0;
+    imgCache = {}; imgOrder = [];
+    pics().forEach(function (im) {
+      if (!im) return;
+      im.classList.remove("on");
+      im.removeAttribute("src");
+      im.alt = "";
+    });
+    if (el) el.classList.remove("has-pic");
   }
-  function show(scrollStrip) {
-    var p = photos[cur], img = el.querySelector(".pl-img"), src = big(p);
-    if (img.getAttribute("src") !== src) { el.classList.add("loading"); img.src = src; }
-    var c = caps && caps[cur], cap = el.querySelector(".pl-cap");
-    img.alt = (c && c[0]) || (album.t + " – zdjęcie " + (cur + 1));
+  function size() {
+    var dpr = Math.min(global.devicePixelRatio || 1, 3);
+    var st = el && el.querySelector(".pl-stage");
+    var w = (st && st.clientWidth) || innerWidth;
+    var h = (st && st.clientHeight) || innerHeight;
+    var pw = Math.min(2560, Math.max(640, Math.round(w * dpr / 100) * 100));
+    var ph = Math.min(1920, Math.max(480, Math.round(h * dpr / 100) * 100));
+    return "=w" + pw + "-h" + ph;
+  }
+  function loadDecoded(url) {
+    if (!url) return Promise.reject(new Error("empty"));
+    var hit = imgCache[url];
+    if (hit) {
+      imgOrder = imgOrder.filter(function (u) { return u !== url; });
+      imgOrder.push(url);
+      return hit;
+    }
+    var im = new Image();
+    im.referrerPolicy = "no-referrer";
+    im.decoding = "async";
+    var ready = new Promise(function (res, rej) {
+      function ok() {
+        var d = im.decode ? im.decode() : Promise.resolve();
+        d.then(function () { res(im); }, function () { res(im); });
+      }
+      im.onload = ok;
+      im.onerror = function () { delete imgCache[url]; imgOrder = imgOrder.filter(function (u) { return u !== url; }); rej(new Error("img")); };
+      im.src = url;
+      if (im.complete && im.naturalWidth) ok();
+    });
+    imgCache[url] = ready;
+    imgOrder.push(url);
+    while (imgOrder.length > 16) {
+      var drop = imgOrder.shift();
+      if (drop !== shownSrc && drop !== url) delete imgCache[drop];
+    }
+    return ready;
+  }
+  function preloadAround(i) {
+    var n = photos.length; if (!n) return;
+    [0, 1, 2, 3, -1].forEach(function (off) {
+      var k = (i + off + n * 4) % n;
+      if (off !== 0 && k === i) return;
+      loadDecoded(big(photos[k])).catch(function () {});
+    });
+  }
+  function snapFade() {
+    pics().forEach(function (im) { if (im) im.style.transition = "none"; });
+    if (el) void el.offsetWidth;
+    pics().forEach(function (im) { if (im) im.style.transition = ""; });
+  }
+  function applyLayer(src, alt) {
+    var pair = pics(), vis = pair[front], hid = pair[1 - front];
+    if (!vis || !hid) return;
+    if (vis.classList.contains("on") && vis.getAttribute("src") === src) {
+      vis.alt = alt || vis.alt;
+      el.classList.remove("loading");
+      el.classList.add("has-pic");
+      return;
+    }
+    hid.alt = alt || "";
+    if (hid.getAttribute("src") !== src) hid.src = src;
+    function commit(instant) {
+      if (instant) pics().forEach(function (im) { if (im) im.style.transition = "none"; });
+      hid.classList.add("on");
+      vis.classList.remove("on");
+      front = 1 - front;
+      shownSrc = src;
+      el.classList.remove("loading");
+      el.classList.add("has-pic");
+      if (instant) {
+        if (el) void el.offsetWidth;
+        pics().forEach(function (im) { if (im) im.style.transition = ""; });
+      }
+    }
+    var instant = !shownSrc || !vis.classList.contains("on");
+    if (hid.decode) hid.decode().then(function () { commit(instant); }, function () { commit(instant); });
+    else commit(instant);
+  }
+  function paintChrome(scrollStrip) {
+    var p = photos[cur], c = caps && caps[cur], cap = el.querySelector(".pl-cap");
+    var alt = (c && c[0]) || (album.t + " – zdjęcie " + (cur + 1));
+    pics().forEach(function (im) { if (im && im.classList.contains("on")) im.alt = alt; });
     if (c && (c[0] || c[1])) {
       cap.querySelector(".c-t").textContent = c[0] || "";
       cap.querySelector(".c-d").textContent = c[1] ? "· " + c[1].slice(0, 10) : "";
@@ -211,21 +297,63 @@
       th.classList.add("on"); th.setAttribute("aria-selected", "true");
       if (scrollStrip !== false) strip.scrollTo({ left: th.offsetLeft - strip.clientWidth / 2 + th.offsetWidth / 2, behavior: "smooth" });
     }
-    [cur + 1, cur - 1].forEach(function (k) {
-      var q = photos[(k + photos.length) % photos.length]; if (q) { var im = new Image(); im.referrerPolicy = "no-referrer"; im.src = big(q); }
+    return alt;
+  }
+  function go(i) {
+    if (!photos.length) return;
+    if (i < 0) i = photos.length - 1;
+    if (i >= photos.length) i = 0;
+    cur = i; show(true);
+  }
+  function show(scrollStrip) {
+    if (!photos.length || !el) return;
+    var p = photos[cur], src = big(p), alt = paintChrome(scrollStrip), my = ++showGen;
+    preloadAround(cur);
+    if (!shownSrc) el.classList.add("loading");
+    loadDecoded(src).then(function () {
+      if (my !== showGen || !el || el.hidden) return;
+      applyLayer(src, alt);
+    }, function () {
+      if (my !== showGen || !el || el.hidden) return;
+      if (!shownSrc) {
+        var im = pics()[front];
+        if (im) { im.src = src; im.alt = alt; im.classList.add("on"); }
+        el.classList.remove("loading");
+      }
     });
   }
 
-  function toggleShow() { timer ? stopShow() : startShow(); }
+  function toggleShow() { playing ? stopShow() : startShow(); }
+  function armSlide() {
+    clearTimeout(timer);
+    if (!playing) return;
+    timer = setTimeout(advanceSlide, SLIDE_MS);
+  }
+  function advanceSlide() {
+    if (!playing || !photos.length) return;
+    var next = (cur + 1) % photos.length, src = big(photos[next]);
+    loadDecoded(src).then(function () {
+      if (!playing || el.hidden) return;
+      cur = next;
+      show(true);
+      armSlide();
+    }, function () {
+      if (!playing || el.hidden) return;
+      cur = next;
+      show(true);
+      armSlide();
+    });
+  }
   function startShow() {
     if (!photos.length) return;
+    playing = true;
     var b = el.querySelector(".pl-play"); b.innerHTML = '❚❚<span class="t"> Zatrzymaj</span>'; b.setAttribute("aria-pressed", "true");
-    timer = setInterval(function () { go(cur + 1); }, SLIDE_MS);
+    armSlide();
   }
   function stopShow() {
-    if (!timer) return;
-    clearInterval(timer); timer = null;
-    var b = el.querySelector(".pl-play"); b.innerHTML = '▶<span class="t"> Pokaz</span>'; b.setAttribute("aria-pressed", "false");
+    playing = false;
+    if (timer) { clearTimeout(timer); timer = null; }
+    var b = el.querySelector(".pl-play"); if (b) { b.innerHTML = '▶<span class="t"> Pokaz</span>'; b.setAttribute("aria-pressed", "false"); }
   }
   function toggleFs() {
     var d = document;
@@ -247,12 +375,12 @@
   /* ---- udostępnianie: link + kod QR ---- */
   function albumLink() {
     var u = A.albumUrl(album.n);
-    if (muzTrack && muzSrc && muzSrc !== "default") u += "?m=" + encodeURIComponent(A.musicParam(muzTrack));
+    if (muzTracks.length && muzSrc && muzSrc !== "default") u += "?m=" + A.musicParam(muzTracks);
     return u;
   }
 
   /* ---- muzyka w tle: jeden wybrany utwór, pętla, przełącznik wł./wył. ---- */
-  var muzTrack = null, muzSrc = "", muzPlaying = false, muzParam = null, ytPlayer = null, ytReady = null, muzVol = 70, muzWant = 0, muzArmed = false;
+  var muzTrack = null, muzTracks = [], muzSel = 0, muzSrc = "", muzPlaying = false, muzParam = null, ytPlayer = null, ytReady = null, muzVol = 70, muzWant = 0, muzArmed = false;
   function muzPreferredOn() {
     try { return localStorage.getItem("albumy.muzyka.on") === "1"; } catch (e) { return false; }
   }
@@ -262,11 +390,15 @@
   function prepareMusic(a, o) {
     A.loadMusicCatalog().then(function () {
       var r = A.resolveMusic(o.muz != null ? o.muz : null, a && a.n, muzParam);
-      muzTrack = r.track || null;
+      muzTracks = (r.tracks && r.tracks.length) ? r.tracks.slice() : (r.track ? [r.track] : []);
+      muzSel = 0;
+      muzTrack = muzTracks[0] || null;
       muzSrc = r.src || "";
-      if (muzTrack && !muzTrack.t) {
-        A.fetchMusicTitle(muzTrack).then(function (t) { if (t && muzTrack) { muzTrack.t = t; paintMuzBtn(); } });
-      }
+      muzTracks.forEach(function (tr, i) {
+        if (tr && !tr.t) {
+          A.fetchMusicTitle(tr).then(function (t) { if (t && muzTracks[i]) { muzTracks[i].t = t; if (muzSel === i) muzTrack = muzTracks[i]; paintMuzBtn(); } });
+        }
+      });
       paintMuzBtn();
     });
   }
@@ -279,7 +411,9 @@
     /* przycisk pokazuje stan docelowy: włączona, jeśli gra albo ma wystartować po pierwszym stuknięciu */
     var want = muzPlaying || muzPreferredOn();
     b.setAttribute("aria-pressed", want ? "true" : "false");
-    b.title = (muzTrack.t ? muzTrack.t + " – " : "") + (want ? "Wyłącz muzykę" : "Włącz muzykę");
+    var label = muzTrack && muzTrack.t ? muzTrack.t : "";
+    if (muzTracks.length > 1) label = (muzSel + 1) + "/" + muzTracks.length + (label ? " " + label : "");
+    b.title = (label ? label + " – " : "") + (want ? "Wyłącz muzykę" : "Włącz muzykę");
     var t = b.querySelector(".t");
     if (t) t.textContent = want ? " Muzyka wł." : " Muzyka wył.";
     b.setAttribute("aria-label", want ? "Muzyka włączona" : "Muzyka wyłączona");
@@ -351,10 +485,26 @@
     return ytReady;
   }
   function startMuz() {
+    if (!muzTracks.length) return;
+    muzTrack = muzTracks[muzSel] || muzTracks[0];
     if (!muzTrack) return;
     var my = ++muzWant, tr = muzTrack;
     if (tr.k === "d") playDrive(tr, my);
     else playYT(tr, my);
+    paintMuzBtn();
+  }
+  function nextMuzTrack() {
+    if (!muzTracks.length) return;
+    muzSel = (muzSel + 1) % muzTracks.length;
+    muzTrack = muzTracks[muzSel];
+    startMuz();
+  }
+  function onTrackEnded() {
+    if (muzTracks.length > 1) nextMuzTrack();
+    else if (muzTrack && muzTrack.k === "d") {
+      var a = el && el.querySelector(".mz-audio");
+      if (a) { try { a.currentTime = 0; a.play(); } catch (e) {} }
+    } else if (ytPlayer) loopYT(ytPlayer);
   }
   function loopYT(player) {
     try { player.seekTo(0, true); player.playVideo(); } catch (e) {}
@@ -377,7 +527,7 @@
           onStateChange: function (e) {
             if (my !== muzWant) return;
             if (e.data === 1) { muzPlaying = true; paintMuzBtn(); }
-            else if (e.data === 0) loopYT(e.target);
+            else if (e.data === 0) onTrackEnded();
             else if (e.data === 2) { muzPlaying = false; paintMuzBtn(); }
           },
           onError: function (e) {
@@ -386,6 +536,7 @@
             var code = e && e.data, m = { 2: "Niepoprawny identyfikator filmu.", 5: "Błąd odtwarzacza YouTube.", 100: "Nie ma takiego filmu.", 101: "Właściciel filmu nie pozwala go osadzić na innej stronie.", 150: "Właściciel filmu nie pozwala go osadzić na innej stronie." };
             paintMuzBtn();
             if (window.console) console.warn(m[code] || ("YouTube zgłosił błąd " + code));
+            if (muzTracks.length > 1) nextMuzTrack();
           }
         }
       });
@@ -402,8 +553,8 @@
       paintMuzBtn();
       if (f) { f.hidden = false; f.src = A.drivePreviewUrl(tr.id); muzPlaying = true; paintMuzBtn(); }
     }
-    audio.loop = true;
-    audio.onended = function () { if (my === muzWant) { try { audio.currentTime = 0; audio.play(); } catch (e) {} } };
+    audio.loop = muzTracks.length <= 1;
+    audio.onended = function () { if (my === muzWant) onTrackEnded(); };
     audio.onplay = ok;
     audio.onplaying = ok;
     audio.onerror = function () {
@@ -513,6 +664,21 @@
   }
 
   global.AlbumPlayer = { open: open, close: close, isOpen: function () { return !!el && !el.hidden; }, index: function () { return cur; }, count: function () { return photos.length; },
+    imageState: function () {
+      var vis = el && el.querySelector(".pl-img.on");
+      var op = vis ? parseFloat(getComputedStyle(vis).opacity) : 0;
+      return {
+        layers: el ? el.querySelectorAll(".pl-img").length : 0,
+        src: vis ? vis.currentSrc || vis.src : "",
+        visible: !!(el && Array.prototype.some.call(el.querySelectorAll(".pl-img"), function (im) {
+          return im.naturalWidth > 0 && parseFloat(getComputedStyle(im).opacity) > 0.2;
+        })),
+        opacity: op,
+        width: vis ? vis.naturalWidth : 0,
+        preloaded: imgOrder.length,
+        shown: shownSrc
+      };
+    },
     musicState: function () {
       var t = muzTrack;
       return {
@@ -523,9 +689,13 @@
         kind: t ? t.k : "",
         id: t ? t.id : "",
         title: t ? t.t : "",
-        param: t ? A.musicParam(t) : "",
+        index: muzSel,
+        count: muzTracks.length,
+        ids: muzTracks.map(function (x) { return x.id; }),
+        param: muzTracks.length ? A.musicParam(muzTracks) : "",
         ytState: ytPlayer && ytPlayer.getPlayerState ? ytPlayer.getPlayerState() : null
       };
-    }
+    },
+    skipTrack: function () { if (muzTracks.length) nextMuzTrack(); }
   };
 })(window);

@@ -1,7 +1,7 @@
 /* Albumy – wspólne funkcje (katalog, okładki, łącza do udostępniania) */
 (function (global) {
   "use strict";
-  var VER = "20261125b";
+  var VER = "20261126a";
   var CANONICAL = "https://gladiator2201.github.io/albumy/";
   var LH3 = "https://lh3.googleusercontent.com/pw/";
   var catalog = null;
@@ -141,13 +141,25 @@
     }
     return null;
   }
-  function musicParam(tr) { return tr.k === "d" ? "d:" + tr.id : tr.id; }
-  function parseMusicParam(m) {
+  function musicParam(tr) {
+    if (Array.isArray(tr)) return tr.map(musicParam).filter(Boolean).join(",");
+    if (!tr) return "";
+    return tr.k === "d" ? "d:" + tr.id : tr.id;
+  }
+  function parseOneMusicParam(m) {
     m = String(m || "").trim();
     if (!m) return null;
     if (/^d:/.test(m)) return { k: "d", id: m.slice(2) };
     if (/^yt:/.test(m)) return { k: "yt", id: m.slice(3) };
     return parseMusicLink(m);
+  }
+  function parseMusicParam(m) {
+    m = String(m || "").trim();
+    if (!m) return null;
+    var parts = m.split(",").map(function (p) { return parseOneMusicParam(p.trim()); }).filter(Boolean);
+    if (!parts.length) return null;
+    if (parts.length === 1) return parts[0];
+    return { k: parts[0].k, id: parts[0].id, t: parts[0].t || "", tracks: parts };
   }
   function musicKey(tr) { return (tr.k || "yt") + ":" + tr.id; }
   function driveStreamUrls(id) {
@@ -237,18 +249,34 @@
     tr = normTrack(tr);
     return tr ? [tr.k, tr.id, tr.t || ""] : null;
   }
-  /* muz w zestawie: jeden utwór (tablica [k,id,t]) albo {t, am} z utworami albumów.
-     Stare pliki: tablica wielu utworów albo {off,x} – bierzemy pierwszy wybrany utwór. */
+  function tracksOf(x) {
+    if (!x) return [];
+    if (Array.isArray(x) && (x[0] === "yt" || x[0] === "d") && typeof x[1] === "string") {
+      var one = normTrack(x); return one ? [one] : [];
+    }
+    if (Array.isArray(x)) return unpackMusicList(x);
+    if (x.tracks) return tracksOf(x.tracks);
+    if (x.track) return tracksOf(x.track);
+    var t = normTrack(x); return t ? [t] : [];
+  }
+  function packTrackOrList(x) {
+    var list = tracksOf(x).map(packOneTrack).filter(Boolean);
+    if (!list.length) return null;
+    return list.length === 1 ? list[0] : list;
+  }
+  /* muz w zestawie: jeden utwór [k,id,t], lista utworów albo {t, am}.
+     Stare pliki: pełny katalog = brak wyboru; {off,x} = lista z x albo pierwszy nieodznaczony. */
   function packSetMusic(muz) {
     if (!muz) return undefined;
-    var track = muz.track, albums = muz.albums || {};
-    if (!track && !Object.keys(albums).length && (muz.off || muz.x || muz.explicit || Array.isArray(muz))) {
+    var tracks = muz.tracks, albums = muz.albums || {};
+    if ((!tracks || !tracks.length) && !muz.track && !Object.keys(albums).length && (muz.off || muz.x || muz.explicit || Array.isArray(muz))) {
       muz = unpackSetMusic(muz) || {};
-      track = muz.track; albums = muz.albums || {};
+      tracks = muz.tracks; albums = muz.albums || {};
     }
-    var t = packOneTrack(track), am = {}, n;
+    if ((!tracks || !tracks.length) && muz.track) tracks = [muz.track];
+    var t = packTrackOrList(tracks), am = {};
     Object.keys(albums).forEach(function (n) {
-      var p = packOneTrack(albums[n]); if (p) am[n] = p;
+      var p = packTrackOrList(albums[n]); if (p) am[n] = p;
     });
     if (t && !Object.keys(am).length) return t;
     var o = {};
@@ -268,45 +296,66 @@
   }
   function unpackSetMusic(p) {
     if (p == null) return null;
-    function wrap(t, albums) { return { track: t || null, albums: albums || {} }; }
-    if (Array.isArray(p) && (p[0] === "yt" || p[0] === "d") && typeof p[1] === "string") return wrap(normTrack(p));
+    function wrap(list, albums) {
+      list = (list || []).map(normTrack).filter(Boolean);
+      return { track: list[0] || null, tracks: list, albums: albums || {} };
+    }
+    function listFrom(v) { return tracksOf(v); }
+    if (Array.isArray(p) && (p[0] === "yt" || p[0] === "d") && typeof p[1] === "string") return wrap([normTrack(p)]);
     if (Array.isArray(p)) {
-      if (looksLikeFullCatalog(p)) return wrap(null);
-      var list = unpackMusicList(p);
-      return wrap(list[0] || null);
+      if (looksLikeFullCatalog(p)) return wrap([]);
+      return wrap(unpackMusicList(p));
     }
     if (typeof p !== "object") return null;
-    if (p.t || p.am || p.track || p.albums) {
+    if (p.t || p.am || p.track || p.tracks || p.albums) {
       var albums = {}, src = p.am || p.albums || {};
-      Object.keys(src).forEach(function (n) { var t = normTrack(src[n]); if (t) albums[n] = t; });
-      return wrap(normTrack(p.t || p.track), albums);
+      Object.keys(src).forEach(function (n) {
+        var list = listFrom(src[n]);
+        if (list.length) albums[n] = list.length === 1 ? list[0] : list;
+      });
+      var list = listFrom(p.t || p.tracks || p.track);
+      if (looksLikeFullCatalog(list) || (Array.isArray(p.t) && looksLikeFullCatalog(p.t))) list = [];
+      return wrap(list, albums);
     }
     if (p.off || p.x || p.explicit) {
-      var extras = unpackMusicList(p.x), picked = extras[0] || null;
-      if (!picked && (p.off || [])[0] !== "*") {
+      var extras = unpackMusicList(p.x);
+      if (extras.length) return wrap(extras);
+      if ((p.off || [])[0] !== "*") {
         var off = {};
         (p.off || []).forEach(function (id) { off[id] = 1; });
-        catalogPlayable().some(function (t) { if (!off[t.id] && !off[musicKey(t)]) { picked = t; return true; } });
-        if (picked && looksLikeFullCatalog(catalogPlayable().filter(function (t) { return !off[t.id]; }))) picked = null;
+        var kept = catalogPlayable().filter(function (t) { return !off[t.id] && !off[musicKey(t)]; });
+        if (looksLikeFullCatalog(kept)) return wrap([]);
+        return wrap(kept);
       }
-      return wrap(picked);
+      return wrap([]);
     }
-    return wrap(normTrack(p));
+    return wrap(listFrom(p));
+  }
+  function enrichTitles(list) {
+    return (list || []).map(function (t) {
+      t = normTrack(t);
+      if (t && !t.t && musicCat && musicCat.byKey[musicKey(t)]) t.t = musicCat.byKey[musicKey(t)].t;
+      return t;
+    }).filter(Boolean);
   }
   function resolveMusic(setMuz, albumN, mParam) {
     var muz = setMuz;
-    if (muz && !muz.track && !muz.albums && (muz.off || muz.x || muz.explicit || Array.isArray(muz))) muz = unpackSetMusic(muz);
-    var track = null, src = "";
-    if (mParam && mParam.id) {
-      track = normTrack(mParam);
-      if (track && !track.t && musicCat && musicCat.byKey[musicKey(track)]) track.t = musicCat.byKey[musicKey(track)].t;
+    if (muz && !muz.track && !muz.tracks && !muz.albums && (muz.off || muz.x || muz.explicit || Array.isArray(muz))) muz = unpackSetMusic(muz);
+    var tracks = [], src = "";
+    if (mParam && (mParam.tracks || mParam.id)) {
+      tracks = enrichTitles(mParam.tracks || [mParam]);
       src = "param";
-    } else if (muz && albumN != null && muz.albums && muz.albums[albumN]) { track = muz.albums[albumN]; src = "album"; }
-    else if (muz && muz.track) { track = muz.track; src = "set"; }
-    else if (musicCat && musicCat.domyslny) { track = musicCat.domyslny; src = "default"; }
-    track = normTrack(track);
-    var list = track ? [track] : [];
-    return { track: track || null, tracks: list, sel: 0, src: track ? src : "" };
+    } else if (muz && albumN != null && muz.albums && muz.albums[albumN]) {
+      tracks = enrichTitles(tracksOf(muz.albums[albumN]));
+      src = "album";
+    } else if (muz && ((muz.tracks && muz.tracks.length) || muz.track)) {
+      tracks = enrichTitles((muz.tracks && muz.tracks.length) ? muz.tracks : [muz.track]);
+      src = "set";
+    } else if (musicCat && musicCat.domyslny) {
+      tracks = enrichTitles([musicCat.domyslny]);
+      src = "default";
+    }
+    return { track: tracks[0] || null, tracks: tracks, sel: 0, src: tracks.length ? src : "" };
   }
 
   /* zestaw: {d: dedykacja, t: tytuł, ids: [numery z katalogu], x: [{u,t,c}] dodane spoza katalogu} */
@@ -392,7 +441,7 @@
     musicParam: musicParam, parseMusicParam: parseMusicParam, musicKey: musicKey,
     driveStreamUrls: driveStreamUrls, drivePreviewUrl: drivePreviewUrl, fmtDur: fmtDur,
     fetchMusicTitle: fetchMusicTitle, loadMusicCatalog: loadMusicCatalog, catalogPlayable: catalogPlayable,
-    packSetMusic: packSetMusic, unpackSetMusic: unpackSetMusic, resolveMusic: resolveMusic,
+    packSetMusic: packSetMusic, unpackSetMusic: unpackSetMusic, resolveMusic: resolveMusic, tracksOf: tracksOf,
     packMusicList: packMusicList, unpackMusicList: unpackMusicList, packOneTrack: packOneTrack, looksLikeFullCatalog: looksLikeFullCatalog, normTrack: normTrack
   };
 })(window);
